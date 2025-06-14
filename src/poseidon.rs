@@ -2,8 +2,7 @@ use ark_crypto_primitives::sponge::poseidon::find_poseidon_ark_and_mds;
 use ark_ff::{Field, PrimeField};
 
 use crate::{
-    CSRef,
-    variables::{V, Wire},
+    utils::pow, variables::{Wire, V}, CSRef
 };
 
 pub struct Poseidon<F: Field> {
@@ -148,15 +147,3 @@ impl<F: PrimeField> Poseidon<F> {
     }
 }
 
-fn pow<F: Field>(cs: CSRef<F>, mut base: V<F>, mut exp: usize) -> V<F> {
-    let mut pow = cs.one();
-    while exp > 0 {
-        if exp % 2 == 1 {
-            pow = cs.wire(pow * &base);
-        }
-        base = cs.wire(&base * &base).into();
-        exp /= 2;
-    }
-
-    pow.into()
-}

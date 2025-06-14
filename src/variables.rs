@@ -31,7 +31,7 @@ impl<F: Field> From<Idx> for Exp<F> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct V<F: Field> {
     val: F,
     exp: Option<Exp<F>>,
@@ -59,7 +59,7 @@ impl<F: Field> VV<F> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Mode {
     Compile,
     Run,
@@ -137,7 +137,7 @@ impl<F: Field> ConstraintSystem<F> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ConstraintSystemRef<F: Field>(Rc<RefCell<ConstraintSystem<F>>>);
 impl<F: Field> ConstraintSystemRef<F> {
     pub fn new(mode: Mode) -> Self {

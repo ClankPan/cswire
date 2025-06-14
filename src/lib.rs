@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests;
 mod poseidon;
-mod variables;
-mod ark_poseidon;
+pub mod variables;
+pub mod ark_poseidon;
+pub mod utils;
 
 use ark_bn254::Fr;
 use ark_ff::{BigInteger, PrimeField};
