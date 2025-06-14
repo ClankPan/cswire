@@ -3,13 +3,12 @@
 * https://github.com/arkworks-rs/crypto-primitives/blob/5f41c00669079d477077ab7521940248ec1a289d/crypto-primitives/src/sponge/poseidon/mod.rs#L54
 */
 
-use ark_crypto_primitives::sponge::FieldElementSize;
-use ark_ff::{BigInteger, Field, PrimeField};
+use ark_ff::PrimeField;
 
 use crate::{
     CSRef,
     utils::pow,
-    variables::{ConstraintSystemRef, V, Wire},
+    variables::{ConstraintSystemRef, V},
 };
 
 /// The mode structure for duplex sponges
@@ -65,7 +64,8 @@ pub struct PoseidonSponge<F: PrimeField> {
     pub state: Vec<V<F>>,
     /// Current mode (whether its absorbing or squeezing)
     pub mode: DuplexSpongeMode,
-    ///
+
+    /// ConstraintSystem
     cs: ConstraintSystemRef<F>,
 }
 

@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests;
-mod poseidon;
 pub mod variables;
 pub mod ark_poseidon;
 pub mod utils;
