@@ -21,7 +21,7 @@ fn test_add_wire_wire() {
 
     let x = &a + b;
     assert!(c==x.raw());
-    
+
     let x = a + &b;
     assert!(c==x.raw());
 
@@ -45,7 +45,7 @@ fn test_sub_wire_wire() {
 
     let x = &a - b;
     assert!(c==x.raw());
-    
+
     let x = a - &b;
     assert!(c==x.raw());
 
@@ -69,7 +69,7 @@ fn test_mul_wire_wire() {
 
     let x = &a * b;
     assert!(c==x.raw());
-    
+
     let x = a * &b;
     assert!(c==x.raw());
 
@@ -94,7 +94,7 @@ fn test_mul_wire_v() {
 
     let x = &a * b.clone();
     assert!(c==x.raw());
-    
+
     let x = a * &b;
     assert!(c==x.raw());
 

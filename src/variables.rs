@@ -1,25 +1,34 @@
 use std::{
     cell::RefCell,
     iter::Sum,
-    ops::{Add, Mul, Sub},
+    ops::{Add, AddAssign, Mul, Sub},
     rc::Rc,
 };
 
 use ark_ff::Field;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
+pub struct Idx(usize);
+
+#[derive(Clone, Copy, Debug)]
 pub struct Wire<F: Field> {
-    exp: Option<usize>,
+    exp: Option<Idx>,
     val: F,
 }
 
 #[derive(Clone, Debug)]
-enum Exp<F> {
-    Idx(usize),
+pub enum Exp<F> {
+    Idx(Idx),
     Coe(F),                        // 係数
     Add(Box<Exp<F>>, Box<Exp<F>>), // 加算
     Sub(Box<Exp<F>>, Box<Exp<F>>), // 減算
     Mul(Box<Exp<F>>, Box<Exp<F>>), // 乗算
+}
+
+impl<F: Field> From<Idx> for Exp<F> {
+    fn from(idx: Idx) -> Self {
+        Exp::Idx(idx)
+    }
 }
 
 #[derive(Clone)]
@@ -55,10 +64,10 @@ pub enum Mode {
     Compile,
     Run,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConstraintSystem<F: Field> {
     wires: Vec<F>,
-    exprs: Vec<(Option<usize>, Exp<F>)>,
+    exprs: Vec<(Option<Idx>, Exp<F>)>,
     mode: Mode,
 }
 
@@ -105,14 +114,14 @@ impl<F: Field> ConstraintSystem<F> {
         let val = F::from(val);
         self.wires.push(val);
         Wire {
-            exp: Some(self.wires.len()),
+            exp: Some(Idx(self.wires.len())),
             val,
         }
     }
     pub fn one(&self) -> Wire<F> {
         Wire {
             val: self.wires[0],
-            exp: Some(0),
+            exp: Some(Idx(0)),
         }
     }
     pub fn anchor<W: Wirable<F>>(&mut self, w: W) {
@@ -128,7 +137,7 @@ impl<F: Field> ConstraintSystem<F> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ConstraintSystemRef<F: Field>(Rc<RefCell<ConstraintSystem<F>>>);
 impl<F: Field> ConstraintSystemRef<F> {
     pub fn new(mode: Mode) -> Self {
@@ -184,766 +193,256 @@ impl<F: Field> Wirable<F> for V<F> {
     }
 }
 
-/* 演算定義 */
-
-// Wire + Wire = V
-impl<F: Field> Add for Wire<F> {
-    type Output = V<F>;
-
-    fn add(self, rhs: Wire<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Add(Box::new(Exp::Idx(x)), Box::new(Exp::Idx(y)))),
-            _ => None,
-        };
-        V {
-            val: self.val + rhs.val,
-            exp,
-        }
-    }
-}
-
-// &Wire + Wire = V
-impl<F: Field> Add<Wire<F>> for &Wire<F> {
-    type Output = V<F>;
-
-    fn add(self, rhs: Wire<F>) -> Self::Output {
-        *self + rhs
-    }
-}
-// Wire + &Wire = V
-impl<F: Field> Add<&Wire<F>> for Wire<F> {
-    type Output = V<F>;
-
-    fn add(self, rhs: &Wire<F>) -> Self::Output {
-        self + *rhs
-    }
-}
-// &Wire + &Wire = V
-impl<F: Field> Add<&Wire<F>> for &Wire<F> {
-    type Output = V<F>;
-
-    fn add(self, rhs: &Wire<F>) -> Self::Output {
-        *self + *rhs
-    }
-}
-
-// V + Wire = V
-impl<F: Field> Add<Wire<F>> for V<F> {
-    type Output = V<F>;
-    fn add(self, rhs: Wire<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Add(Box::new(x), Box::new(Exp::Idx(y)))),
-            _ => None,
-        };
-        V {
-            val: self.val + rhs.val,
-            exp,
-        }
-    }
-}
-
-// &V + Wire = V
-impl<F: Field> Add<Wire<F>> for &V<F> {
-    type Output = V<F>;
-
-    fn add(self, rhs: Wire<F>) -> Self::Output {
-        let cloned: V<F> = self.clone();
-        cloned + rhs
-    }
-}
-
-// &V + Wire = V
-impl<F: Field> Add<&Wire<F>> for V<F> {
-    type Output = V<F>;
-
-    fn add(self, rhs: &Wire<F>) -> Self::Output {
-        self + *rhs
-    }
-}
-
-// &V + &Wire = V
-impl<F: Field> Add<&Wire<F>> for &V<F> {
-    type Output = V<F>;
-
-    fn add(self, rhs: &Wire<F>) -> Self::Output {
-        self + *rhs
-    }
-}
-
-// Wire + V = V
-impl<F: Field> Add<V<F>> for Wire<F> {
-    type Output = V<F>;
-    fn add(self, rhs: V<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Add(Box::new(Exp::Idx(x)), Box::new(y))),
-            _ => None,
-        };
-        V {
-            val: self.val + rhs.val,
-            exp,
-        }
-    }
-}
-
-// &Wire + V = V
-impl<F: Field> Add<V<F>> for &Wire<F> {
-    type Output = V<F>;
-    fn add(self, rhs: V<F>) -> Self::Output {
-        *self + rhs
-    }
-}
-
-// Wire + &V = V
-impl<F: Field> Add<&V<F>> for Wire<F> {
-    type Output = V<F>;
-    fn add(self, rhs: &V<F>) -> Self::Output {
-        let cloned: V<F> = rhs.clone();
-        self + cloned
-    }
-}
-
-// &Wire + &V = V
-impl<F: Field> Add<&V<F>> for &Wire<F> {
-    type Output = V<F>;
-    fn add(self, rhs: &V<F>) -> Self::Output {
-        *self + rhs
-    }
-}
-
-// V + V = V
-impl<F: Field> Add for V<F> {
-    type Output = V<F>;
-    fn add(self, rhs: V<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Add(Box::new(x), Box::new(y))),
-            _ => None,
-        };
-        V {
-            val: self.val + rhs.val,
-            exp,
-        }
-    }
-}
-
-// &V + &V = V
-impl<F: Field> Add for &V<F> {
-    type Output = V<F>;
-    fn add(self, rhs: &V<F>) -> Self::Output {
-        let cloned_self: V<F> = self.clone();
-        let cloned_rhs: V<F> = rhs.clone();
-        cloned_self + cloned_rhs
-    }
-}
-// &V + V = V
-impl<F: Field> Add<V<F>> for &V<F> {
-    type Output = V<F>;
-    fn add(self, rhs: V<F>) -> Self::Output {
-        self + &rhs
-    }
-}
-// V + &V = V
-impl<F: Field> Add<&V<F>> for V<F> {
-    type Output = V<F>;
-    fn add(self, rhs: &V<F>) -> Self::Output {
-        &self + rhs
-    }
-}
-
-// Wire * Wire = VV
-impl<F: Field> Mul for Wire<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: Wire<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Mul(Box::new(Exp::Idx(x)), Box::new(Exp::Idx(y)))),
-            _ => None,
-        };
-        VV {
-            val: self.val * rhs.val,
-            exp,
-        }
-    }
-}
-
-// &Wire * &Wire = VV
-impl<F: Field> Mul for &Wire<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: &Wire<F>) -> Self::Output {
-        *self * *rhs
-    }
-}
-// &Wire * Wire = VV
-impl<F: Field> Mul<Wire<F>> for &Wire<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: Wire<F>) -> Self::Output {
-        *self * rhs
-    }
-}
-// Wire * &Wire = VV
-impl<F: Field> Mul<&Wire<F>> for Wire<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: &Wire<F>) -> Self::Output {
-        self * *rhs
-    }
-}
-
-// V * Wire = VV
-impl<F: Field> Mul<Wire<F>> for V<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: Wire<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Mul(Box::new(x), Box::new(Exp::Idx(y)))),
-            _ => None,
-        };
-        VV {
-            val: self.val * rhs.val,
-            exp,
-        }
-    }
-}
-// &V * Wire = VV
-impl<F: Field> Mul<Wire<F>> for &V<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: Wire<F>) -> Self::Output {
-        let cloned: V<F> = self.clone();
-        cloned * rhs
-    }
-}
-// V * &Wire = VV
-impl<F: Field> Mul<&Wire<F>> for V<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: &Wire<F>) -> Self::Output {
-        self * *rhs
-    }
-}
-
-// &V * &Wire = VV
-impl<F: Field> Mul<&Wire<F>> for &V<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: &Wire<F>) -> Self::Output {
-        self * *rhs
-    }
-}
-
-// Wire * V = VV
-impl<F: Field> Mul<V<F>> for Wire<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: V<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Mul(Box::new(Exp::Idx(x)), Box::new(y))),
-            _ => None,
-        };
-        VV {
-            val: self.val * rhs.val,
-            exp,
-        }
-    }
-}
-// &Wire * V = VV
-impl<F: Field> Mul<V<F>> for &Wire<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: V<F>) -> Self::Output {
-        *self * rhs
-    }
-}
-// Wire * &V = VV
-impl<F: Field> Mul<&V<F>> for Wire<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: &V<F>) -> Self::Output {
-        let cloned: V<F> = rhs.clone();
-        self * cloned
-    }
-}
-// &Wire * &V = VV
-impl<F: Field> Mul<&V<F>> for &Wire<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: &V<F>) -> Self::Output {
-        *self * rhs
-    }
-}
-
-// V * V = VV
-impl<F: Field> Mul for V<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: V<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Mul(Box::new(x), Box::new(y))),
-            _ => None,
-        };
-        VV {
-            val: self.val * rhs.val,
-            exp,
-        }
-    }
-}
-
-// &V * &V = VV
-impl<F: Field> Mul for &V<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: &V<F>) -> Self::Output {
-        let cloned_self: V<F> = self.clone();
-        let cloned_rhs: V<F> = rhs.clone();
-        cloned_self * cloned_rhs
-    }
-}
-// &V * V = VV
-impl<F: Field> Mul<&V<F>> for V<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: &V<F>) -> Self::Output {
-        &self * rhs
-    }
-}
-// V * &V = VV
-impl<F: Field> Mul<V<F>> for &V<F> {
-    type Output = VV<F>;
-    fn mul(self, rhs: V<F>) -> Self::Output {
-        self * &rhs
-    }
-}
-
-// Wire + VV = VV
-impl<F: Field> Add<VV<F>> for Wire<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: VV<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Add(Box::new(Exp::Idx(x)), Box::new(y))),
-            _ => None,
-        };
-        VV {
-            val: self.val + rhs.val,
-            exp,
-        }
-    }
-}
-// &Wire + VV = VV
-impl<F: Field> Add<VV<F>> for &Wire<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: VV<F>) -> Self::Output {
-        *self + rhs
-    }
-}
-
-// Wire + &VV = VV
-impl<F: Field> Add<&VV<F>> for Wire<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: &VV<F>) -> Self::Output {
-        let cloned: VV<F> = rhs.clone();
-        self + cloned
-    }
-}
-
-// &Wire + &VV = VV
-impl<F: Field> Add<&VV<F>> for &Wire<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: &VV<F>) -> Self::Output {
-        *self + rhs
-    }
-}
-
-// VV + Wire = VV
-impl<F: Field> Add<Wire<F>> for VV<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: Wire<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Add(Box::new(x), Box::new(Exp::Idx(y)))),
-            _ => None,
-        };
-        VV {
-            val: self.val + rhs.val,
-            exp,
-        }
-    }
-}
-// &VV + Wire = VV
-impl<F: Field> Add<Wire<F>> for &VV<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: Wire<F>) -> Self::Output {
-        let cloned: VV<F> = self.clone();
-        cloned + rhs
-    }
-}
-// VV + &Wire = VV
-impl<F: Field> Add<&Wire<F>> for VV<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: &Wire<F>) -> Self::Output {
-        self + *rhs
-    }
-}
-// &VV + &Wire = VV
-impl<F: Field> Add<&Wire<F>> for &VV<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: &Wire<F>) -> Self::Output {
-        self + *rhs
-    }
-}
-
-// VV + VV = VV
-impl<F: Field> Add for VV<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: VV<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Add(Box::new(x), Box::new(y))),
-            _ => None,
-        };
-        VV {
-            val: self.val + rhs.val,
-            exp,
-        }
-    }
-}
-// &VV + &VV = VV
-impl<F: Field> Add for &VV<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: &VV<F>) -> Self::Output {
-        let cloned_self = self.clone();
-        let cloned_rhs = rhs.clone();
-        cloned_self + cloned_rhs
-    }
-}
-// &VV + VV = VV
-impl<F: Field> Add<VV<F>> for &VV<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: VV<F>) -> Self::Output {
-        self + &rhs
-    }
-}
-
-// VV + &VV = VV
-impl<F: Field> Add<&VV<F>> for VV<F> {
-    type Output = VV<F>;
-    fn add(self, rhs: &VV<F>) -> Self::Output {
-        &self + rhs
-    }
-}
-
-/* Sub */
-
-// Wire - Wire = V
-impl<F: Field> Sub for Wire<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: Wire<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Sub(Box::new(Exp::Idx(x)), Box::new(Exp::Idx(y)))),
-            _ => None,
-        };
-        V {
-            val: self.val - rhs.val,
-            exp,
-        }
-    }
-}
-
-// &Wire - Wire = V
-impl<F: Field> Sub for &Wire<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: &Wire<F>) -> Self::Output {
-        *self - *rhs
-    }
-}
-// Wire - &Wire = V
-impl<F: Field> Sub<&Wire<F>> for Wire<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: &Wire<F>) -> Self::Output {
-        self - *rhs
-    }
-} // &Wire - Wire = V
-impl<F: Field> Sub<Wire<F>> for &Wire<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: Wire<F>) -> Self::Output {
-        *self - rhs
-    }
-}
-
-// V - Wire = V
-impl<F: Field> Sub<Wire<F>> for V<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: Wire<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Sub(Box::new(x), Box::new(Exp::Idx(y)))),
-            _ => None,
-        };
-        V {
-            val: self.val - rhs.val,
-            exp,
-        }
-    }
-}
-// &V - Wire = V
-impl<F: Field> Sub<Wire<F>> for &V<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: Wire<F>) -> Self::Output {
-        let cloned = self.clone();
-        cloned - rhs
-    }
-}
-// V - &Wire = V
-impl<F: Field> Sub<&Wire<F>> for V<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: &Wire<F>) -> Self::Output {
-        self - *rhs
-    }
-}
-// &V - &Wire = V
-impl<F: Field> Sub<&Wire<F>> for &V<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: &Wire<F>) -> Self::Output {
-        self - *rhs
-    }
-}
-
-// Wire - V = V
-impl<F: Field> Sub<V<F>> for Wire<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: V<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Sub(Box::new(Exp::Idx(x)), Box::new(y))),
-            _ => None,
-        };
-        V {
-            val: self.val - rhs.val,
-            exp,
-        }
-    }
-}
-// &Wire - V = V
-impl<F: Field> Sub<V<F>> for &Wire<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: V<F>) -> Self::Output {
-        *self - rhs
-    }
-}
-// Wire - &V = V
-impl<F: Field> Sub<&V<F>> for Wire<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: &V<F>) -> Self::Output {
-        let cloned: V<F> = rhs.clone();
-        self - cloned
-    }
-}
-// &Wire - &V = V
-impl<F: Field> Sub<&V<F>> for &Wire<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: &V<F>) -> Self::Output {
-        *self - rhs
-    }
-}
-
-// V - V = V
-impl<F: Field> Sub for V<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: V<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Sub(Box::new(x), Box::new(y))),
-            _ => None,
-        };
-        V {
-            val: self.val - rhs.val,
-            exp,
-        }
-    }
-}
-// &V - &V = V
-impl<F: Field> Sub for &V<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: &V<F>) -> Self::Output {
-        let cloned_self: V<F> = self.clone();
-        let cloned_rhs: V<F> = rhs.clone();
-        cloned_self - cloned_rhs
-    }
-}
-// &V - V = V
-impl<F: Field> Sub<V<F>> for &V<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: V<F>) -> Self::Output {
-        self - &rhs
-    }
-}
-// V - &V = V
-impl<F: Field> Sub<&V<F>> for V<F> {
-    type Output = V<F>;
-    fn sub(self, rhs: &V<F>) -> Self::Output {
-        &self - rhs
-    }
-}
-
-// Wire - VV = VV
-impl<F: Field> Sub<VV<F>> for Wire<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: VV<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Sub(Box::new(Exp::Idx(x)), Box::new(y))),
-            _ => None,
-        };
-        VV {
-            val: self.val - rhs.val,
-            exp,
-        }
-    }
-}
-// &Wire - VV = VV
-impl<F: Field> Sub<VV<F>> for &Wire<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: VV<F>) -> Self::Output {
-        *self - rhs
-    }
-}
-// Wire - &VV = VV
-impl<F: Field> Sub<&VV<F>> for Wire<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: &VV<F>) -> Self::Output {
-        let cloned: VV<F> = rhs.clone();
-        self - cloned
-    }
-}
-// &Wire - &VV = VV
-impl<F: Field> Sub<&VV<F>> for &Wire<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: &VV<F>) -> Self::Output {
-        *self - rhs
-    }
-}
-
-// VV - Wire = VV
-impl<F: Field> Sub<Wire<F>> for VV<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: Wire<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Sub(Box::new(x), Box::new(Exp::Idx(y)))),
-            _ => None,
-        };
-        VV {
-            val: self.val - rhs.val,
-            exp,
-        }
-    }
-}
-// &VV - Wire = VV
-impl<F: Field> Sub<Wire<F>> for &VV<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: Wire<F>) -> Self::Output {
-        let cloned: VV<F> = self.clone();
-        cloned - rhs
-    }
-}
-
-// VV - &Wire = VV
-impl<F: Field> Sub<&Wire<F>> for VV<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: &Wire<F>) -> Self::Output {
-        self - *rhs
-    }
-}
-// &VV - &Wire = VV
-impl<F: Field> Sub<&Wire<F>> for &VV<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: &Wire<F>) -> Self::Output {
-        self - *rhs
-    }
-}
-
-// VV - VV = VV
-impl<F: Field> Sub for VV<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: VV<F>) -> Self::Output {
-        let exp = match (self.exp, rhs.exp) {
-            (Some(x), Some(y)) => Some(Exp::Sub(Box::new(x), Box::new(y))),
-            _ => None,
-        };
-        VV {
-            val: self.val - rhs.val,
-            exp,
-        }
-    }
-}
-// &VV - &VV = VV
-impl<F: Field> Sub for &VV<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: &VV<F>) -> Self::Output {
-        let cloned_self = self.clone();
-        let cloned_rsh = rhs.clone();
-        cloned_self - cloned_rsh
-    }
-}
-// &VV - VV = VV
-impl<F: Field> Sub<VV<F>> for &VV<F> {
-    type Output = VV<F>;
-    fn sub(self, rhs: VV<F>) -> Self::Output {
-        self - &rhs
-    }
-}
-
-/* Sum */
-
-impl<F: Field> Sum for V<F> {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.reduce(|acc, x| acc + x)
-            .expect("Iterator must have at least one element")
-    }
-}
-
-impl<F: Field> Sum for VV<F> {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.reduce(|acc, x| acc + x)
-            .expect("Iterator must have at least one element")
-    }
-}
-
-impl<F: Field> Sum<Wire<F>> for V<F> {
-    fn sum<I: Iterator<Item = Wire<F>>>(iter: I) -> Self {
-
-        iter.map(V::from)
-            .reduce(|acc, x| acc + x)
-            .expect("Iterator must have at least one element")
-
-    }
-}
-
-/* 定数倍 */
-
-// Wire * usize = V
-impl<F: Field> Mul<usize> for Wire<F> {
-    type Output = V<F>;
-    fn mul(self, rhs: usize) -> Self::Output {
-        let coef = F::from(rhs as u64);
-        let exp = self
-            .exp
-            .map(|x| Exp::Mul(Box::new(Exp::Coe(coef)), Box::new(Exp::Idx(x))));
-        V {
-            val: coef * self.val,
-            exp,
-        }
-    }
-}
-
-// usize * Wire = V
-impl<F: Field> Mul<Wire<F>> for usize {
-    type Output = V<F>;
-    fn mul(self, rhs: Wire<F>) -> Self::Output {
-        let coef = F::from(self as u64);
-        let exp = rhs
-            .exp
-            .map(|x| Exp::Mul(Box::new(Exp::Coe(coef)), Box::new(Exp::Idx(x))));
-        V {
-            val: coef * rhs.val,
-            exp,
-        }
-    }
-}
-
 /* From */
 
 impl<F: Field> From<Wire<F>> for V<F> {
     fn from(Wire { exp, val }: Wire<F>) -> Self {
-        let exp = if let Some(idx) = exp {
-            Some(Exp::Idx(idx))
-        } else {
-            None
-        };
+        let exp = exp.map(Exp::Idx);
         Self { exp, val }
     }
 }
 
+impl<F: Field> From<&Wire<F>> for V<F> {
+    fn from(Wire { exp, val }: &Wire<F>) -> Self {
+        let exp = exp.map(Exp::Idx);
+        Self { exp, val: *val }
+    }
+}
+
 impl<F: Field> From<V<F>> for VV<F> {
-    fn from(_v: V<F>) -> Self {
-        todo!()
+    fn from(v: V<F>) -> Self {
+        VV {
+            val: v.val,
+            exp: v.exp,
+        }
+    }
+}
+impl<F: Field> From<&V<F>> for VV<F> {
+    fn from(v: &V<F>) -> Self {
+        VV {
+            val: v.val,
+            exp: v.exp.clone(),
+        }
+    }
+}
+
+impl<F: Field> From<F> for V<F> {
+    fn from(val: F) -> Self {
+        V {
+            val,
+            exp: Some(Exp::Coe(val)),
+        }
+    }
+}
+
+impl<F: Field> From<&F> for V<F> {
+    fn from(val: &F) -> Self {
+        V {
+            val: *val,
+            exp: Some(Exp::Coe(*val)),
+        }
+    }
+}
+
+macro_rules! impl_op {
+
+    // lhs op rhs
+    ($trait:ident, $method:ident, $lhs:ident, $rhs:ident, $output:ident) => {
+        impl<F: Field> $trait<$rhs<F>> for $lhs<F> {
+            type Output = $output<F>;
+            fn $method(self, rhs: $rhs<F>) -> Self::Output {
+                impl_op!(@inner $trait, self, rhs, $method, $output)
+            }
+        }
+        impl_op!(@ref $trait, $method, $lhs, &$rhs, $output);
+        impl_op!(@ref $trait, $method, &$lhs, $rhs, $output);
+        impl_op!(@ref $trait, $method, &$lhs, &$rhs, $output);
+    };
+
+    // &lhs op rhs
+    (@ref $trait:ident, $method:ident, &$lhs:ident, $rhs:ident, $output:ident) => {
+        impl<'a, F: Field> $trait<$rhs<F>> for &'a $lhs<F> {
+            type Output = $output<F>;
+            fn $method(self, rhs: $rhs<F>) -> Self::Output {
+                impl_op!(@inner $trait, self.clone(), rhs, $method, $output)
+            }
+        }
+    };
+
+    // lhs op &rhs
+    (@ref $trait:ident, $method:ident, $lhs:ident, &$rhs:ident, $output:ident) => {
+        impl<'a, F: Field> $trait<&'a $rhs<F>> for $lhs<F> {
+            type Output = $output<F>;
+            fn $method(self, rhs: &'a $rhs<F>) -> Self::Output {
+                impl_op!(@inner $trait, self, rhs.clone(), $method, $output)
+            }
+        }
+    };
+
+    // &lhs op &rhs
+    (@ref $trait:ident, $method:ident, &$lhs:ident, &$rhs:ident, $output:ident) => {
+        impl<'a, 'b, F: Field> $trait<&'b $rhs<F>> for &'a $lhs<F> {
+            type Output = $output<F>;
+            fn $method(self, rhs: &'b $rhs<F>) -> Self::Output {
+                impl_op!(@inner $trait, self.clone(), rhs.clone(), $method, $output)
+            }
+        }
+    };
+
+    // ty op rhs
+    ($trait:ident, $method:ident, $lhs:ident, #$rhs:ident, $output:ident) => {
+        impl<F: Field> $trait<$rhs> for $lhs<F> {
+            type Output = $output<F>;
+            fn $method(self, rhs: $rhs) -> Self::Output {
+                let val: F = rhs.into();
+                impl_op!(@inner $trait, self, V { val, exp: Some(Exp::Coe(val)) }, $method, $output)
+            }
+        }
+        impl_op!(@ref $trait, $method, $lhs, &#$rhs, $output);
+        impl_op!(@ref $trait, $method, &$lhs, #$rhs, $output);
+        impl_op!(@ref $trait, $method, &$lhs, &#$rhs, $output);
+    };
+
+    // &ty op rhs
+    (@ref $trait:ident, $method:ident, $lhs:ident, &#$rhs:ident, $output:ident) => {
+        impl<F: Field> $trait<&$rhs> for $lhs<F> {
+            type Output = $output<F>;
+            fn $method(self, rhs: &$rhs) -> Self::Output {
+                let val: F = rhs.clone().into();
+                impl_op!(@inner $trait, self, V { val, exp: Some(Exp::Coe(val)) }, $method, $output)
+            }
+        }
+    };
+
+    // ty op &rhs
+    (@ref $trait:ident, $method:ident, &$lhs:ident, #$rhs:ident, $output:ident) => {
+        impl<F: Field> $trait<$rhs> for &$lhs<F> {
+            type Output = $output<F>;
+            fn $method(self, rhs: $rhs) -> Self::Output {
+                let val: F = rhs.into();
+                impl_op!(@inner $trait, self.clone(), V { val, exp: Some(Exp::Coe(val)) }, $method, $output)
+            }
+        }
+    };
+
+    // &ty op &rhs
+    (@ref $trait:ident, $method:ident, &$lhs:ident, &#$rhs:ident, $output:ident) => {
+        impl<F: Field> $trait<&$rhs> for &$lhs<F> {
+            type Output = $output<F>;
+            fn $method(self, rhs: &$rhs) -> Self::Output {
+                let val: F = rhs.clone().into();
+                impl_op!(@inner $trait, self.clone(), V { val, exp: Some(Exp::Coe(val)) }, $method, $output)
+            }
+        }
+    };
+
+    // lhs op ty
+    (@ref $trait:ident, $method:ident, #$lhs:ident, $rhs:ident, $output:ident) => {
+        impl<F: Field> $trait<$rhs<F>> for $lhs {
+            type Output = $output<F>;
+            fn $method(self, rhs: $rhs<F>) -> Self::Output {
+                let val: F = self.into();
+                impl_op!(@inner $trait, V { val, exp: Some(Exp::Coe(val)) }, rhs, $method, $output)
+            }
+        }
+    };
+
+    // 共通の内部処理
+    (@inner $trait:ident, $lhs:expr, $rhs:expr, $method:ident, $output:ident) => {{
+        let lhs = $lhs;
+        let rhs = $rhs;
+        let exp = match (lhs.exp, rhs.exp) {
+            (Some(x), Some(y)) => Some(Exp::$trait(Box::new(x.into()), Box::new(y.into()))),
+            _ => None,
+        };
+        $output {
+            val: lhs.val.$method(rhs.val),
+            exp,
+        }
+    }};
+}
+
+impl_op!(Add, add, Wire, #bool, V);
+impl_op!(Add, add, Wire, #u8, V);
+impl_op!(Add, add, Wire, #u16, V);
+impl_op!(Add, add, Wire, #u32, V);
+impl_op!(Add, add, Wire, #u64, V);
+impl_op!(Add, add, Wire, #u128, V);
+
+impl_op!(Sub, sub, Wire, #bool, V);
+impl_op!(Sub, sub, Wire, #u8, V);
+impl_op!(Sub, sub, Wire, #u16, V);
+impl_op!(Sub, sub, Wire, #u32, V);
+impl_op!(Sub, sub, Wire, #u64, V);
+impl_op!(Sub, sub, Wire, #u128, V);
+
+impl_op!(Mul, mul, Wire, #bool, V);
+impl_op!(Mul, mul, Wire, #u8, V);
+impl_op!(Mul, mul, Wire, #u16, V);
+impl_op!(Mul, mul, Wire, #u32, V);
+impl_op!(Mul, mul, Wire, #u64, V);
+impl_op!(Mul, mul, Wire, #u128, V);
+
+impl_op!(Add, add, Wire, Wire, V);
+impl_op!(Add, add, Wire, V, V);
+impl_op!(Add, add, Wire, VV, VV);
+impl_op!(Add, add, V, Wire, V);
+impl_op!(Add, add, V, V, V);
+impl_op!(Add, add, V, VV, VV);
+impl_op!(Add, add, VV, Wire, VV);
+impl_op!(Add, add, VV, V, VV);
+impl_op!(Add, add, VV, VV, VV);
+
+impl_op!(Sub, sub, Wire, Wire, V);
+impl_op!(Sub, sub, Wire, V, V);
+impl_op!(Sub, sub, Wire, VV, VV);
+impl_op!(Sub, sub, V, Wire, V);
+impl_op!(Sub, sub, V, V, V);
+impl_op!(Sub, sub, V, VV, VV);
+impl_op!(Sub, sub, VV, Wire, VV);
+impl_op!(Sub, sub, VV, V, VV);
+impl_op!(Sub, sub, VV, VV, VV);
+
+impl_op!(Mul, mul, Wire, Wire, VV);
+impl_op!(Mul, mul, Wire, V, VV);
+impl_op!(Mul, mul, V, Wire, VV);
+impl_op!(Mul, mul, V, V, VV);
+
+impl<F: Field> Sum<Wire<F>> for V<F> {
+    fn sum<I: Iterator<Item = Wire<F>>>(iter: I) -> Self {
+        iter.map(|i| i.into())
+            .reduce(|acc, x| acc + x)
+            .expect("length is zero")
+    }
+}
+impl<F: Field> Sum<V<F>> for V<F> {
+    fn sum<I: Iterator<Item = V<F>>>(iter: I) -> Self {
+        iter.reduce(|acc, x| acc + x).expect("length is zero")
+    }
+}
+impl<F: Field> Sum<VV<F>> for VV<F> {
+    fn sum<I: Iterator<Item = VV<F>>>(iter: I) -> Self {
+        iter.reduce(|acc, x| acc + x).expect("length is zero")
+    }
+}
+
+impl<F: Field> AddAssign<Wire<F>> for V<F> {
+    fn add_assign(&mut self, rhs: Wire<F>) {
+        *self = &*self + rhs;
+    }
+}
+impl<F: Field> AddAssign<V<F>> for V<F> {
+    fn add_assign(&mut self, rhs: V<F>) {
+        *self = &*self + rhs;
+    }
+}
+impl<F: Field> AddAssign<&Wire<F>> for V<F> {
+    fn add_assign(&mut self, rhs: &Wire<F>) {
+        *self = &*self + rhs;
+    }
+}
+impl<F: Field> AddAssign<&V<F>> for V<F> {
+    fn add_assign(&mut self, rhs: &V<F>) {
+        *self = &*self + rhs;
     }
 }
