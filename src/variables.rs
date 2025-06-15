@@ -95,7 +95,7 @@ impl<F: Field> ConstraintSystem<F> {
         }
     }
     pub fn witnesses(&self) -> Vec<F> {
-        todo!()
+        self.wires.clone()
     }
     pub fn wire<W: Wirable<F>>(&mut self, w: W) -> Wire<F> {
         let vv = w.into_vv();
