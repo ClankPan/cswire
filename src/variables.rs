@@ -149,7 +149,7 @@ impl<F: Field> ConstraintSystemRef<F> {
     pub fn set_mode(&self, mode: Mode) {
         self.0.borrow_mut().mode = mode
     }
-    pub fn compile(&self) {
+    pub fn compile(&self) -> R1CS {
         self.0.borrow().compile()
     }
     pub fn witnesses(&self) -> Vec<F> {
