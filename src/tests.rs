@@ -1,9 +1,8 @@
+use ark_bn254::Fr;
 use ark_ff::UniformRand;
 use ark_std::test_rng;
 
 use crate::variables::*;
-
-use super::*;
 
 #[test]
 fn test_add_wire_wire() {
