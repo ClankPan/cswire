@@ -64,6 +64,9 @@ pub enum Mode {
     Compile,
     Run,
 }
+
+pub struct R1CS;
+
 #[derive(Clone, Debug)]
 pub struct ConstraintSystem<F: Field> {
     wires: Vec<F>,
@@ -85,7 +88,7 @@ impl<F: Field> ConstraintSystem<F> {
     pub fn set_mode(&mut self, mode: Mode) {
         self.mode = mode
     }
-    pub fn compile(&self) {
+    pub fn compile(&self) -> R1CS {
         match self.mode {
             Mode::Compile => todo!(),
             Mode::Run => todo!(),
