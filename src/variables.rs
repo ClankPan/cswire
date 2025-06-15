@@ -369,6 +369,20 @@ impl_op!(Add, add, Wire, #u32, V);
 impl_op!(Add, add, Wire, #u64, V);
 impl_op!(Add, add, Wire, #u128, V);
 
+impl_op!(Add, add, V, #bool, V);
+impl_op!(Add, add, V, #u8, V);
+impl_op!(Add, add, V, #u16, V);
+impl_op!(Add, add, V, #u32, V);
+impl_op!(Add, add, V, #u64, V);
+impl_op!(Add, add, V, #u128, V);
+
+impl_op!(Add, add, VV, #bool, VV);
+impl_op!(Add, add, VV, #u8, VV);
+impl_op!(Add, add, VV, #u16, VV);
+impl_op!(Add, add, VV, #u32, VV);
+impl_op!(Add, add, VV, #u64, VV);
+impl_op!(Add, add, VV, #u128, VV);
+
 impl_op!(Sub, sub, Wire, #bool, V);
 impl_op!(Sub, sub, Wire, #u8, V);
 impl_op!(Sub, sub, Wire, #u16, V);
@@ -376,12 +390,40 @@ impl_op!(Sub, sub, Wire, #u32, V);
 impl_op!(Sub, sub, Wire, #u64, V);
 impl_op!(Sub, sub, Wire, #u128, V);
 
+impl_op!(Sub, sub, V, #bool, V);
+impl_op!(Sub, sub, V, #u8, V);
+impl_op!(Sub, sub, V, #u16, V);
+impl_op!(Sub, sub, V, #u32, V);
+impl_op!(Sub, sub, V, #u64, V);
+impl_op!(Sub, sub, V, #u128, V);
+
+impl_op!(Sub, sub, VV, #bool, VV);
+impl_op!(Sub, sub, VV, #u8, VV);
+impl_op!(Sub, sub, VV, #u16, VV);
+impl_op!(Sub, sub, VV, #u32, VV);
+impl_op!(Sub, sub, VV, #u64, VV);
+impl_op!(Sub, sub, VV, #u128, VV);
+
 impl_op!(Mul, mul, Wire, #bool, V);
 impl_op!(Mul, mul, Wire, #u8, V);
 impl_op!(Mul, mul, Wire, #u16, V);
 impl_op!(Mul, mul, Wire, #u32, V);
 impl_op!(Mul, mul, Wire, #u64, V);
 impl_op!(Mul, mul, Wire, #u128, V);
+
+impl_op!(Mul, mul, V, #bool, V);
+impl_op!(Mul, mul, V, #u8, V);
+impl_op!(Mul, mul, V, #u16, V);
+impl_op!(Mul, mul, V, #u32, V);
+impl_op!(Mul, mul, V, #u64, V);
+impl_op!(Mul, mul, V, #u128, V);
+
+impl_op!(Mul, mul, VV, #bool, VV);
+impl_op!(Mul, mul, VV, #u8, VV);
+impl_op!(Mul, mul, VV, #u16, VV);
+impl_op!(Mul, mul, VV, #u32, VV);
+impl_op!(Mul, mul, VV, #u64, VV);
+impl_op!(Mul, mul, VV, #u128, VV);
 
 impl_op!(Add, add, Wire, Wire, V);
 impl_op!(Add, add, Wire, V, V);
