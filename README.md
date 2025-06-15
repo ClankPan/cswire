@@ -33,18 +33,23 @@ cswire = { git = "https://github.com/ClankPan/cswire.git" }
 Here's a simple example demonstrating basic usage:
 
 ```rust
+use ark_bn254::Fr;
+use ark_ff::Field;
 use cswire::*;
+ 
+fn main() {
+    println!("Hello, world!");
+    let cs = ConstraintSystem::<Fr>::new_ref(Mode::Compile);
+    let a: Wire<Fr> = cs.alloc(Fr::from(11));
+    let b: Wire<Fr> = cs.alloc(Fr::from(22));
+    let c: Wire<Fr> = cs.wire(a * b - 1u64);
+    assert!(c.raw() == Fr::from(11) * Fr::from(22) - Fr::ONE);
 
-let cs = ConstraintSystem::<F>::new_ref(Mode::Compile);
-let a: Wire<F> = cs.alloc(F::from(11));
-let b: Wire<F> = cs.alloc(F::from(22));
-let c: Wire<F> = cs.wire(a * b - 1);
-assert!(c.raw() == F::from(11) * F::from(22) - F::ONE);
+    // let r1cs = cs.compile();
+    let witnesses = cs.witnesses();
 
-let r1cs = cs.compile();
-let witnesses = cs.witnesses();
-
-assert!(witnesses == vec![F::ONE, F::from(11), F::from(22), F::from(241)]);
+    assert!(witnesses == vec![Fr::ONE, Fr::from(11), Fr::from(22), Fr::from(241)]);
+}
 ```
 
 ## Advanced Usage
