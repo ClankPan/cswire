@@ -1,7 +1,6 @@
 use ark_ff::Field;
 
-use crate::{variables::V, CSRef};
-
+use crate::{variables::V, CSRef, Wire};
 
 pub fn pow<F: Field>(cs: CSRef<F>, mut base: V<F>, mut exp: u64) -> V<F> {
     let mut pow = cs.one();
@@ -14,4 +13,10 @@ pub fn pow<F: Field>(cs: CSRef<F>, mut base: V<F>, mut exp: u64) -> V<F> {
     }
 
     pow.into()
+}
+
+// Wireだけじゃなくて、Vも入れるようにする。
+pub fn enforce_bits<F: Field>(cs: CSRef<F>, bits: &[Wire<F>]) {
+    bits.iter().for_each(|b|cs.anchor((cs.one() - b) * b));
+    
 }
