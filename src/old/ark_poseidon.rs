@@ -1,18 +1,14 @@
-/*
-* 元の実装はここから
-* https://github.com/arkworks-rs/crypto-primitives/blob/5f41c00669079d477077ab7521940248ec1a289d/crypto-primitives/src/sponge/poseidon/mod.rs#L54
-*/
+// * 元の実装はここから
+// * https://github.com/arkworks-rs/crypto-primitives/blob/5f41c00669079d477077ab7521940248ec1a289d/crypto-primitives/src/sponge/poseidon/mod.rs#L54
 
 use ark_crypto_primitives::sponge::poseidon::find_poseidon_ark_and_mds;
 use ark_ff::PrimeField;
 
-use crate::{ConstraintSystemRef, V, wire::Coeff, utils::pow};
-
-// use crate::{
-//     CSRef,
-//     utils::pow,
-//     variables::{ConstraintSystemRef, V},
-// };
+use crate::{
+    CSRef,
+    utils::pow,
+    variables::{ConstraintSystemRef, V},
+};
 
 /// The mode structure for duplex sponges
 #[derive(Clone, Debug)]
@@ -101,8 +97,8 @@ pub struct PoseidonSponge<F: PrimeField> {
 
     /// ConstraintSystem
     cs: ConstraintSystemRef<F>,
-    // pub ark: Vec<Vec<V<F>>>,
-    // pub mds: Vec<Vec<V<F>>>,
+    pub ark: Vec<Vec<V<F>>>,
+    pub mds: Vec<Vec<V<F>>>,
 }
 
 impl<F: PrimeField> PoseidonSponge<F> {
@@ -121,8 +117,7 @@ impl<F: PrimeField> PoseidonSponge<F> {
 
     fn apply_ark(&self, state: &mut [V<F>], round_number: usize) {
         for (i, state_elem) in state.iter_mut().enumerate() {
-            let ark_i = self.parameters.ark[round_number][i];
-            *state_elem += Coeff::new(ark_i) * self.cs.one();
+            *state_elem += self.ark[round_number][i].clone();
         }
     }
 
@@ -131,9 +126,7 @@ impl<F: PrimeField> PoseidonSponge<F> {
         for i in 0..state.len() {
             let mut cur = self.cs.one() * 0u32;
             for (j, state_elem) in state.iter().enumerate() {
-                // wireはVVしか受け付けないので、oneを掛けてVVにしている。
-                let term = state_elem * Coeff::new(self.parameters.mds[i][j]);
-                let term = self.cs.wire(self.cs.one() * term);
+                let term = self.cs.wire(state_elem * &self.mds[i][j]);
                 cur += term;
             }
             new_state.push(cur);
@@ -233,16 +226,29 @@ impl<F: PrimeField> PoseidonSponge<F> {
 }
 
 impl<F: PrimeField> PoseidonSponge<F> {
-    pub fn new(cs: ConstraintSystemRef<F>, parameters: &PoseidonConfig<F>) -> Self {
+    pub fn new(cs: CSRef<F>, parameters: &PoseidonConfig<F>) -> Self {
         let state = vec![cs.one() * 0u32; parameters.rate + parameters.capacity];
         let mode = DuplexSpongeMode::Absorbing {
             next_absorb_index: 0,
         };
+        let mds = parameters
+            .mds
+            .iter()
+            .map(|row| row.iter().map(|c| c.into()).collect())
+            .collect();
+        let ark = parameters
+            .ark
+            .iter()
+            .map(|row| row.iter().map(|c| c.into()).collect())
+            .collect();
+
         Self {
             parameters: parameters.clone(),
             state,
             mode,
             cs,
+            mds,
+            ark,
         }
     }
 
@@ -326,7 +332,6 @@ pub fn circom_bn254_poseidon_canonical_config<F: PrimeField>() -> PoseidonConfig
 
 #[cfg(test)]
 mod tests {
-    use crate::ConstraintSystemRef;
     use ark_bn254::Fr;
     use ark_crypto_primitives::sponge::{
         CryptographicSponge, FieldBasedCryptographicSponge,
@@ -336,7 +341,7 @@ mod tests {
         },
     };
     use ark_ff::PrimeField;
-
+    use crate::{CS, variables::Mode};
     use super::{PoseidonSponge as CWPoseidonSponge, circom_bn254_poseidon_canonical_config};
 
     /// This Poseidon configuration generator produces a Poseidon configuration with custom parameters
@@ -377,18 +382,18 @@ mod tests {
         let values: Vec<Fr> = (0..10).map(Fr::from).collect();
 
         // Arkのposeidon
-        let mut sponge = ArkPoseidonSponge::<Fr>::new(&poseidon_canonical_config());
+        let mut sponge = ArkPoseidonSponge::<Fr>::new(& poseidon_canonical_config());
         for v in values.iter() {
             sponge.absorb(v);
         }
         let ark_hash = sponge.squeeze_native_field_elements(1)[0];
 
         // cswireのposeidon
-        let cs = ConstraintSystemRef::new();
+        let cs = CS::new_ref(Mode::Compile);
         let config = circom_bn254_poseidon_canonical_config::<Fr>();
         let mut sponge = CWPoseidonSponge::<Fr>::new(cs.clone(), &config);
         for v in values.iter() {
-            sponge.absorb(&[cs.alloc(*v) * 1]); // absorbがWireを受け付けないので、係数を掛けてVにしてる。
+            sponge.absorb(&[v.into()]);
         }
         let cw_hash = sponge.squeeze_native_field_elements(1)[0].clone();
 
