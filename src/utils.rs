@@ -1,8 +1,8 @@
 use ark_ff::Field;
 
-use crate::{ConstraintSystemRef, V, Wire};
+use crate::{ ConstraintSystemRef, Wire, V};
 
-pub fn pow<F: Field>(cs: ConstraintSystemRef<F>, mut base: V<F>, mut exp: u64) -> V<F> {
+pub fn pow<'a, F: Field>(cs: ConstraintSystemRef<'a, F>, mut base: V<'a, F>, mut exp: u64) -> V<'a, F> {
     let mut pow = cs.one();
     while exp > 0 {
         if exp % 2 == 1 {

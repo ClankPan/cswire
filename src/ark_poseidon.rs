@@ -89,24 +89,24 @@ impl<F: PrimeField> PoseidonConfig<F> {
 /// with small syntax changes.
 ///
 /// [cos]: https://eprint.iacr.org/2019/1076
-pub struct PoseidonSponge<F: PrimeField> {
+pub struct PoseidonSponge<'a, F: PrimeField> {
     /// Sponge Config
     pub parameters: PoseidonConfig<F>,
 
     // Sponge State
     /// Current sponge's state (current elements in the permutation block)
-    pub state: Vec<V<F>>,
+    pub state: Vec<V<'a, F>>,
     /// Current mode (whether its absorbing or squeezing)
     pub mode: DuplexSpongeMode,
 
     /// ConstraintSystem
-    cs: ConstraintSystemRef<F>,
+    cs: ConstraintSystemRef<'a, F>,
     // pub ark: Vec<Vec<V<F>>>,
     // pub mds: Vec<Vec<V<F>>>,
 }
 
-impl<F: PrimeField> PoseidonSponge<F> {
-    fn apply_s_box(&self, state: &mut [V<F>], is_full_round: bool) {
+impl<'a, F: PrimeField> PoseidonSponge<'a, F> {
+    fn apply_s_box(&self, state: &mut [V<'a, F>], is_full_round: bool) {
         // Full rounds apply the S Box (x^alpha) to every element of state
         if is_full_round {
             for elem in state {
@@ -119,14 +119,14 @@ impl<F: PrimeField> PoseidonSponge<F> {
         }
     }
 
-    fn apply_ark(&self, state: &mut [V<F>], round_number: usize) {
+    fn apply_ark(&self, state: &mut [V<'a, F>], round_number: usize) {
         for (i, state_elem) in state.iter_mut().enumerate() {
             let ark_i = self.parameters.ark[round_number][i];
             *state_elem += Coeff::new(ark_i) * self.cs.one();
         }
     }
 
-    fn apply_mds(&self, state: &mut [V<F>]) {
+    fn apply_mds(&self, state: &mut [V<'a, F>]) {
         let mut new_state = Vec::new();
         for i in 0..state.len() {
             let mut cur = self.cs.one() * 0u32;
@@ -167,7 +167,7 @@ impl<F: PrimeField> PoseidonSponge<F> {
     }
 
     // Absorbs everything in elements, this does not end in an absorbtion.
-    fn absorb_internal(&mut self, mut rate_start_index: usize, elements: &[V<F>]) {
+    fn absorb_internal(&mut self, mut rate_start_index: usize, elements: &[V<'a, F>]) {
         let mut remaining_elements = elements;
 
         loop {
@@ -199,7 +199,7 @@ impl<F: PrimeField> PoseidonSponge<F> {
     }
 
     // Squeeze |output| many elements. This does not end in a squeeze
-    fn squeeze_internal(&mut self, mut rate_start_index: usize, output: &mut [V<F>]) {
+    fn squeeze_internal(&mut self, mut rate_start_index: usize, output: &mut [V<'a,F>]) {
         let mut output_remaining = output;
         loop {
             // if we can finish in this call
@@ -232,8 +232,8 @@ impl<F: PrimeField> PoseidonSponge<F> {
     }
 }
 
-impl<F: PrimeField> PoseidonSponge<F> {
-    pub fn new(cs: ConstraintSystemRef<F>, parameters: &PoseidonConfig<F>) -> Self {
+impl<'a, F: PrimeField> PoseidonSponge<'a, F> {
+    pub fn new(cs: ConstraintSystemRef<'a, F>, parameters: &PoseidonConfig<F>) -> Self {
         let state = vec![cs.one() * 0u32; parameters.rate + parameters.capacity];
         let mode = DuplexSpongeMode::Absorbing {
             next_absorb_index: 0,
@@ -246,7 +246,7 @@ impl<F: PrimeField> PoseidonSponge<F> {
         }
     }
 
-    pub fn absorb(&mut self, input: &[V<F>]) {
+    pub fn absorb(&mut self, input: &[V<'a, F>]) {
         let elems = input;
         if elems.is_empty() {
             return;
@@ -384,7 +384,8 @@ mod tests {
         let ark_hash = sponge.squeeze_native_field_elements(1)[0];
 
         // cswireのposeidon
-        let cs = ConstraintSystemRef::new();
+        let life = ();
+        let cs = ConstraintSystemRef::new(&life);
         let config = circom_bn254_poseidon_canonical_config::<Fr>();
         let mut sponge = CWPoseidonSponge::<Fr>::new(cs.clone(), &config);
         for v in values.iter() {

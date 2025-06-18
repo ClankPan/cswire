@@ -3,17 +3,17 @@ use ark_ff::Field;
 use crate::{ConstraintSystemRef, V, utils::enforce_bits, wire::Wire};
 
 #[derive(Clone)]
-pub struct SwitchboardSystem<F: Field> {
-    cs: ConstraintSystemRef<F>,
-    turn_on: Wire<F>,
-    switches: Vec<Wire<F>>,
-    one: Wire<F>,
+pub struct SwitchboardSystem<'a, F: Field> {
+    cs: ConstraintSystemRef<'a, F>,
+    turn_on: Wire<'a,F>,
+    switches: Vec<Wire<'a, F>>,
+    one: Wire<'a, F>,
     mode: bool,
     index: u64,
 }
 
-impl<F: Field> SwitchboardSystem<F> {
-    pub fn new(cs: ConstraintSystemRef<F>, turn_on: Wire<F>) -> Self {
+impl<'a, F: Field> SwitchboardSystem<'a, F> {
+    pub fn new(cs: ConstraintSystemRef<'a, F>, turn_on: Wire<'a, F>) -> Self {
         Self {
             one: cs.one(), // 保存しておく。
             mode: cs.switch(),
@@ -24,7 +24,7 @@ impl<F: Field> SwitchboardSystem<F> {
         }
     }
 
-    pub fn set(&mut self, index: u64) -> ConstraintSystemRef<F> {
+    pub fn set(&'a mut self, index: u64) -> ConstraintSystemRef<'a, F> {
         // 順番にスイッチを割り当てているかを確認する。
         assert!(index == self.index);
         self.index += 1;
@@ -39,7 +39,7 @@ impl<F: Field> SwitchboardSystem<F> {
         self.cs.clone()
     }
 
-    pub fn finialize(self) -> ConstraintSystemRef<F> {
+    pub fn finialize(self) -> ConstraintSystemRef<'a, F> {
         let cs = self.cs;
         cs.set_one(self.one); // csを元にもしておく。
         cs.set_switch(self.mode); //

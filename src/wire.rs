@@ -2,24 +2,25 @@ use ark_ff::Field;
 
 use crate::expr::Expr;
 
-
-#[derive(Clone, Copy, Default)]
-pub struct Wire<F: Field> {
+#[derive(Clone, Copy)]
+pub struct Wire<'a, F: Field> {
     pub(crate) val: F,
     pub(crate) exp: usize,
-}
-
-
-#[derive(Clone)]
-pub struct V<F: Field> {
-    pub(crate) val: F,
-    pub(crate) exp: Expr<F>,
+    pub(crate) life: &'a (),
 }
 
 #[derive(Clone)]
-pub struct VV<F: Field> {
+pub struct V<'a, F: Field> {
     pub(crate) val: F,
     pub(crate) exp: Expr<F>,
+    pub(crate) life: &'a (),
+}
+
+#[derive(Clone)]
+pub struct VV<'a, F: Field> {
+    pub(crate) val: F,
+    pub(crate) exp: Expr<F>,
+    pub(crate) life: &'a (),
 }
 #[derive(Clone)]
 pub struct Coeff<F: Field>(pub F);
@@ -35,17 +36,17 @@ impl<F: Field> From<F> for Coeff<F> {
     }
 }
 
-impl<F: Field> Wire<F> {
+impl<'a, F: Field> Wire<'a, F> {
     pub fn raw(&self) -> F {
         self.val
     }
 }
-impl<F: Field> V<F> {
+impl<'a, F: Field> V<'a, F> {
     pub fn raw(&self) -> F {
         self.val
     }
 }
-impl<F: Field> VV<F> {
+impl<'a, F: Field> VV<'a, F> {
     pub fn raw(&self) -> F {
         self.val
     }

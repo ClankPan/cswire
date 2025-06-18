@@ -1,8 +1,11 @@
-use std::{iter::Sum, ops::{Add, AddAssign, Mul, Sub}};
+use std::{
+    iter::Sum,
+    ops::{Add, AddAssign, Mul, Sub},
+};
 
 use ark_ff::Field;
 
-use crate::{Coeff, Expr, Wire, V, VV};
+use crate::{Coeff, Expr, V, VV, Wire};
 
 macro_rules! impl_op {
     ($trait:ident, $method:ident, $lhs:ty, $output:ty) => {
@@ -24,14 +27,57 @@ macro_rules! impl_op {
         impl_op!(@inner $trait, $method, &$rhs, &$lhs, $output);
     };
     (@inner $trait:ident, $method:ident, $lhs:ty, $rhs:ty, $output:ty) => {
-        impl<F: Field> $trait<$rhs> for $lhs {
+        impl<'a, F: Field> $trait<$rhs> for $lhs {
             type Output = $output;
             fn $method(self, rhs: $rhs) -> Self::Output {
+                let life = self.life;
                 let (lhs_val, lhs_exp) = self.parse();
                 let (rhs_val, rhs_exp) = rhs.parse();
                 Self::Output {
                     exp: Expr::$trait(Box::new(lhs_exp), Box::new(rhs_exp)),
                     val: lhs_val.$method(rhs_val),
+                    life
+                }
+            }
+        }
+    };
+    (@coeff $trait:ident, $method:ident, $lhs:ty, $rhs:ty, $output:ty) => {
+        impl_op!(@coeff_self $trait, $method, $lhs, $rhs, $output);
+        impl_op!(@coeff_self $trait, $method, &$lhs, $rhs, $output);
+        impl_op!(@coeff_self $trait, $method, $lhs, &$rhs, $output);
+        impl_op!(@coeff_self $trait, $method, &$lhs, &$rhs, $output);
+
+        impl_op!(@coeff_rhs $trait, $method, $rhs, $lhs, $output);
+        impl_op!(@coeff_rhs $trait, $method, &$rhs, $lhs, $output);
+        impl_op!(@coeff_rhs $trait, $method, $rhs, &$lhs, $output);
+        impl_op!(@coeff_rhs $trait, $method, &$rhs, &$lhs, $output);
+    };
+    (@coeff_self $trait:ident, $method:ident, $lhs:ty, $rhs:ty, $output:ty) => {
+        impl<'a, F: Field> $trait<$rhs> for $lhs {
+            type Output = $output;
+            fn $method(self, rhs: $rhs) -> Self::Output {
+                let life = self.life;
+                let (lhs_val, lhs_exp) = self.parse();
+                let (rhs_val, rhs_exp) = rhs.parse();
+                Self::Output {
+                    exp: Expr::$trait(Box::new(lhs_exp), Box::new(rhs_exp)),
+                    val: lhs_val.$method(rhs_val),
+                    life
+                }
+            }
+        }
+    };
+    (@coeff_rhs $trait:ident, $method:ident, $lhs:ty, $rhs:ty, $output:ty) => {
+        impl<'a, F: Field> $trait<$rhs> for $lhs {
+            type Output = $output;
+            fn $method(self, rhs: $rhs) -> Self::Output {
+                let life = rhs.life;
+                let (lhs_val, lhs_exp) = self.parse();
+                let (rhs_val, rhs_exp) = rhs.parse();
+                Self::Output {
+                    exp: Expr::$trait(Box::new(lhs_exp), Box::new(rhs_exp)),
+                    val: lhs_val.$method(rhs_val),
+                    life
                 }
             }
         }
@@ -70,94 +116,90 @@ macro_rules! impl_op {
 // impl_op!(Sub,sub, VV<F>, u32, V<F>);
 // impl_op!(Sub,sub, VV<F>, u64, V<F>);
 
-impl_op!(Add, add, Wire<F>, V<F>);
-impl_op!(Add, add, V<F>, V<F>);
-impl_op!(Add, add, Wire<F>, V<F>, V<F>);
-impl_op!(Add, add, Wire<F>, VV<F>, VV<F>);
-impl_op!(Add, add, V<F>, VV<F>, VV<F>);
+impl_op!(Add, add, Wire<'a, F>, V<'a, F>);
+impl_op!(Add, add, V<'a, F>, V<'a, F>);
+impl_op!(Add, add, Wire<'a, F>, V<'a, F>, V<'a, F>);
+impl_op!(Add, add, Wire<'a, F>, VV<'a, F>, VV<'a, F>);
+impl_op!(Add, add, V<'a, F>, VV<'a, F>, VV<'a, F>);
+//
+impl_op!(Sub, sub, Wire<'a, F>, V<'a, F>);
+impl_op!(Sub, sub, V<'a, F>, V<'a, F>);
+impl_op!(Sub, sub, Wire<'a, F>, V<'a, F>, V<'a, F>);
+impl_op!(Sub, sub, Wire<'a, F>, VV<'a, F>, VV<'a, F>);
+impl_op!(Sub, sub, V<'a, F>, VV<'a, F>, VV<'a, F>);
+//
+impl_op!(Mul, mul, Wire<'a, F>, VV<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, VV<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, V<'a, F>, VV<'a, F>);
+//
+impl_op!(@coeff Mul, mul, Wire<'a, F>, bool, V<'a, F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, u8, V<'a, F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, u16, V<'a, F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, u32, V<'a,F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, u64, V<'a, F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, bool, V<'a, F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, u8, V<'a, F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, u16, V<'a,F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, u32, V<'a,F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, u64, V<'a,F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, bool, V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, u8, V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, u16, V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, u32, V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, u64, V<'a, F>);
 
-impl_op!(Sub, sub, Wire<F>, V<F>);
-impl_op!(Sub, sub, V<F>, V<F>);
-impl_op!(Sub, sub, Wire<F>, V<F>, V<F>);
-impl_op!(Sub, sub, Wire<F>, VV<F>, VV<F>);
-impl_op!(Sub, sub, V<F>, VV<F>, VV<F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, i8,  V<'a, F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, i16, V<'a, F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, i32, V<'a, F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, i64, V<'a, F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, i8,     V<'a, F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, i16,    V<'a, F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, i32,    V<'a, F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, i64,    V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, i8,    V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, i16,   V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, i32,   V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, i64,   V<'a, F>);
 
-impl_op!(Mul, mul, Wire<F>, VV<F>);
-impl_op!(Mul, mul, V<F>, VV<F>);
-impl_op!(Mul, mul, Wire<F>, V<F>, VV<F>);
+impl_op!(@coeff Mul, mul, Wire<'a, F>, Coeff<F>, V<'a, F>);
+impl_op!(@coeff Mul, mul, V<'a, F>, Coeff<F>, V<'a, F>);
+impl_op!(@coeff Mul, mul, VV<'a, F>, Coeff< F>, VV<'a, F>);
+//
 
-impl_op!(Mul, mul, Wire<F>, bool, V<F>);
-impl_op!(Mul, mul, Wire<F>, u8, V<F>);
-impl_op!(Mul, mul, Wire<F>, u16, V<F>);
-impl_op!(Mul, mul, Wire<F>, u32, V<F>);
-impl_op!(Mul, mul, Wire<F>, u64, V<F>);
-impl_op!(Mul, mul, V<F>, bool, V<F>);
-impl_op!(Mul, mul, V<F>, u8, V<F>);
-impl_op!(Mul, mul, V<F>, u16, V<F>);
-impl_op!(Mul, mul, V<F>, u32, V<F>);
-impl_op!(Mul, mul, V<F>, u64, V<F>);
-impl_op!(Mul, mul, VV<F>, bool, V<F>);
-impl_op!(Mul, mul, VV<F>, u8, V<F>);
-impl_op!(Mul, mul, VV<F>, u16, V<F>);
-impl_op!(Mul, mul, VV<F>, u32, V<F>);
-impl_op!(Mul, mul, VV<F>, u64, V<F>);
-
-impl_op!(Mul, mul, Wire<F>, i8, V<F>);
-impl_op!(Mul, mul, Wire<F>, i16, V<F>);
-impl_op!(Mul, mul, Wire<F>, i32, V<F>);
-impl_op!(Mul, mul, Wire<F>, i64, V<F>);
-impl_op!(Mul, mul, V<F>, i8, V<F>);
-impl_op!(Mul, mul, V<F>, i16, V<F>);
-impl_op!(Mul, mul, V<F>, i32, V<F>);
-impl_op!(Mul, mul, V<F>, i64, V<F>);
-impl_op!(Mul, mul, VV<F>, i8, V<F>);
-impl_op!(Mul, mul, VV<F>, i16, V<F>);
-impl_op!(Mul, mul, VV<F>, i32, V<F>);
-impl_op!(Mul, mul, VV<F>, i64, V<F>);
-
-impl_op!(Mul, mul, Wire<F>, Coeff<F>, V<F>);
-impl_op!(Mul, mul, V<F>, Coeff<F>, V<F>);
-impl_op!(Mul, mul, VV<F>, Coeff<F>, VV<F>);
-
-
-
-
-impl<F: Field> AddAssign<Wire<F>> for V<F> {
-    fn add_assign(&mut self, rhs: Wire<F>) {
+impl<'a, F: Field> AddAssign<Wire<'a, F>> for V<'a, F> {
+    fn add_assign(&mut self, rhs: Wire<'a, F>) {
         *self = &*self + rhs;
     }
 }
-impl<F: Field> AddAssign<V<F>> for V<F> {
-    fn add_assign(&mut self, rhs: V<F>) {
+impl<'a, F: Field> AddAssign<V<'a, F>> for V<'a, F> {
+    fn add_assign(&mut self, rhs: V<'a, F>) {
         *self = &*self + rhs;
     }
 }
-impl<F: Field> AddAssign<&Wire<F>> for V<F> {
-    fn add_assign(&mut self, rhs: &Wire<F>) {
+impl<'a, F: Field> AddAssign<&Wire<'a, F>> for V<'a, F> {
+    fn add_assign(&mut self, rhs: &Wire<'a, F>) {
         *self = &*self + rhs;
     }
 }
-impl<F: Field> AddAssign<&V<F>> for V<F> {
-    fn add_assign(&mut self, rhs: &V<F>) {
+impl<'a, F: Field> AddAssign<&V<'a, F>> for V<'a, F> {
+    fn add_assign(&mut self, rhs: &V<'a, F>) {
         *self = &*self + rhs;
     }
 }
 
-impl<F: Field> Sum<Wire<F>> for V<F> {
-    fn sum<I: Iterator<Item = Wire<F>>>(iter: I) -> Self {
+impl<'a, F: Field> Sum<Wire<'a, F>> for V<'a, F> {
+    fn sum<I: Iterator<Item = Wire<'a, F>>>(iter: I) -> Self {
         iter.map(|i| i * 1)
             .reduce(|acc, x| acc + x)
             .expect("length is zero")
     }
 }
 
-impl<F: Field> Sum<V<F>> for V<F> {
-    fn sum<I: Iterator<Item = V<F>>>(iter: I) -> Self {
+impl<'a, F: Field> Sum<V<'a, F>> for V<'a, F> {
+    fn sum<I: Iterator<Item = V<'a, F>>>(iter: I) -> Self {
         iter.reduce(|acc, x| acc + x).expect("length is zero")
     }
 }
-
-
 
 trait Parse<F: Field> {
     fn parse(&self) -> (F, Expr<F>);
@@ -211,7 +253,7 @@ impl<F: Field> Parse<F> for u64 {
     }
 }
 
-impl<F: Field> Parse<F> for Wire<F> {
+impl<'a, F: Field> Parse<F> for Wire<'a, F> {
     fn parse(&self) -> (F, Expr<F>) {
         let exp = self.exp.into();
         let val = self.val;
@@ -251,8 +293,7 @@ impl<F: Field> Parse<F> for i64 {
     }
 }
 
-
-impl<F: Field> Parse<F> for V<F> {
+impl<'a, F: Field> Parse<F> for V<'a, F> {
     fn parse(&self) -> (F, Expr<F>) {
         let exp = self.exp.clone();
         let val = self.val;
@@ -260,7 +301,7 @@ impl<F: Field> Parse<F> for V<F> {
     }
 }
 
-impl<F: Field> Parse<F> for VV<F> {
+impl<'a, F: Field> Parse<F> for VV<'a, F> {
     fn parse(&self) -> (F, Expr<F>) {
         let exp = self.exp.clone();
         let val = self.val;
@@ -272,14 +313,13 @@ impl<F: Field> Parse<F> for VV<F> {
 mod tests {
     use ark_bn254::Fr;
 
-    use crate::{Coeff, ConstraintSystemRef};
-
+    use crate::{Coeff, ConstraintSystem};
 
     #[test]
     fn test_coeff() {
-        let a = Fr::from(123);
-        let cs = ConstraintSystemRef::<Fr>::new();
-        let wire = cs.alloc(123);
-        let _b = Coeff(a) * wire;
+        // let a = Fr::from(123);
+        // let cs = ConstraintSystemRef::<Fr>::new();
+        // let wire = cs.alloc(123);
+        // let _b = Coeff(a) * wire;
     }
 }

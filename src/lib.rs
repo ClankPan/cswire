@@ -1,10 +1,10 @@
-pub mod expr;
-pub mod switchboard;
-pub mod wire;
-pub mod ops;
 pub mod ark_poseidon;
-pub mod utils;
+pub mod expr;
 pub mod lifetime;
+pub mod ops;
+pub mod switchboard;
+pub mod utils;
+pub mod wire;
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -15,33 +15,38 @@ pub use expr::*;
 pub use wire::*;
 
 #[derive(Clone)]
-pub(crate) struct ConstraintSystem<F: Field> {
-    wires: Vec<Wire<F>>,
+pub(crate) struct ConstraintSystem<'a, F: Field> {
+    wires: Vec<F>,
     exprs: Vec<Expr<F>>,
     switch: bool,
-    one: Wire<F>,
+    one_idx: usize, // oneを指し示すindex
+    life: &'a (),
 }
 
-impl<F: Field> ConstraintSystem<F> {
-    pub fn new() -> Self {
-        let one = Wire {
-            val: F::ONE,
-            exp: 0,
-        };
+impl<'a, F: Field> ConstraintSystem<'a, F> {
+    pub fn new(life: &'a ()) -> Self {
+        let one_idx = 0;
         Self {
-            wires: vec![one],
+            wires: vec![F::ONE],
             exprs: vec![],
             switch: true,
-            one,
+            one_idx,
+            life,
         }
     }
 
     pub fn set_one(&mut self, one: Wire<F>) {
-        self.one = one
+        self.one_idx = one.exp;
     }
-    pub fn one(&self) -> Wire<F> {
-        self.one
+
+    pub fn one(&self) -> Wire<'_, F> {
+        Wire {
+            exp: self.one_idx,
+            val: self.wires[self.one_idx],
+            life: self.life,
+        }
     }
+
     pub fn io(&mut self, _wire: Wire<F>) -> Wire<F> {
         todo!()
     }
@@ -71,12 +76,12 @@ impl<F: Field> ConstraintSystem<F> {
             true => val.into(),
             false => F::ZERO,
         };
-
         let wire = Wire {
             val,
             exp: self.wires.len(),
+            life: self.life,
         };
-        self.wires.push(wire);
+        self.wires.push(val);
         wire
     }
 
@@ -99,24 +104,38 @@ impl<F: Field> ConstraintSystem<F> {
 }
 
 #[derive(Clone)]
-pub struct ConstraintSystemRef<F: Field>(Rc<RefCell<ConstraintSystem<F>>>);
-impl<F: Field> ConstraintSystemRef<F> {
-    pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(ConstraintSystem::new())))
+pub struct ConstraintSystemRef<'a, F: Field>(Rc<RefCell<ConstraintSystem<'a, F>>>);
+
+impl<'a, F: Field> ConstraintSystemRef<'a, F> {
+    pub fn new(life: &'a ()) -> Self {
+        Self(Rc::new(RefCell::new(ConstraintSystem::new(life))))
     }
 
     pub fn set_one(&self, one: Wire<F>) {
         self.0.borrow_mut().set_one(one);
     }
 
-    pub fn one(&self) -> Wire<F> {
-        self.0.borrow().one()
+    pub fn one(&self) -> Wire<'a, F> {
+        let (exp, val, life) = {
+            let cs = self.0.borrow();
+            let wire = cs.one();
+            (wire.exp, wire.val, cs.life)
+        };
+        Wire { exp, val, life }
     }
-    pub fn io(&self, wire: Wire<F>) -> Wire<F> {
-        self.0.borrow_mut().io(wire)
+
+    pub fn io(&self, _wire: Wire<F>) {
+        todo!()
     }
-    pub fn wire(&self, var: VV<F>) -> Wire<F> {
-        self.0.borrow_mut().wire(var)
+    pub fn wire(&self, var: VV<F>) -> Wire<'a, F> {
+        // ───── ① RefMut のスコープをこのブロック内に閉じ込める
+        let (exp, val, life) = {
+            let mut cs = self.0.borrow_mut(); // Ref 開始
+            let wire = cs.wire(var);
+            (wire.exp, wire.val, cs.life)
+        }; // Ref 終了
+
+        Wire { exp, val, life } // 借用はもう存在しないので返せる
     }
 
     pub fn link<T>(&self, vv: VV<F>, constant: T)
@@ -130,7 +149,13 @@ impl<F: Field> ConstraintSystemRef<F> {
     where
         F: From<T>,
     {
-        self.0.borrow_mut().alloc(val)
+        let (exp, val, life) = {
+            let mut cs = self.0.borrow_mut(); // Ref 開始
+            let wire = cs.alloc(val);
+            (wire.exp, wire.val, cs.life)
+        }; // Ref 終了
+
+        Wire { exp, val, life } // 借用はもう存在しないので返せる
     }
 
     pub fn witnesses(&self) -> Vec<F> {
