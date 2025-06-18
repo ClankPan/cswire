@@ -6,7 +6,7 @@ pub mod switchboard;
 pub mod utils;
 pub mod wire;
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 use ark_ff::Field;
 // use expr::{Expr, R1CS, compile};
@@ -19,19 +19,19 @@ pub(crate) struct ConstraintSystem<'a, F: Field> {
     wires: Vec<F>,
     exprs: Vec<Expr<F>>,
     switch: bool,
-    one_idx: usize, // oneを指し示すindex
-    life: &'a (),
+    one_idx: usize,             // oneを指し示すindex
+    _life: PhantomData<&'a ()>, // 型データとライフタイムだけを保持することで、クロージャーにcsを渡した時に、コンパイラがcloneを要求しなくなる。
 }
 
 impl<'a, F: Field> ConstraintSystem<'a, F> {
-    pub fn new(life: &'a ()) -> Self {
+    pub fn new(_: &'a ()) -> Self {
         let one_idx = 0;
         Self {
             wires: vec![F::ONE],
             exprs: vec![],
             switch: true,
             one_idx,
-            life,
+            _life: PhantomData,
         }
     }
 
@@ -43,7 +43,8 @@ impl<'a, F: Field> ConstraintSystem<'a, F> {
         Wire {
             exp: self.one_idx,
             val: self.wires[self.one_idx],
-            life: self.life,
+            _life: PhantomData,
+            // life: self.life,
         }
     }
 
@@ -79,7 +80,8 @@ impl<'a, F: Field> ConstraintSystem<'a, F> {
         let wire = Wire {
             val,
             exp: self.wires.len(),
-            life: self.life,
+            // life: self.life,
+            _life: PhantomData,
         };
         self.wires.push(val);
         wire
@@ -116,12 +118,16 @@ impl<'a, F: Field> ConstraintSystemRef<'a, F> {
     }
 
     pub fn one(&self) -> Wire<'a, F> {
-        let (exp, val, life) = {
+        let (exp, val) = {
             let cs = self.0.borrow();
             let wire = cs.one();
-            (wire.exp, wire.val, cs.life)
+            (wire.exp, wire.val)
         };
-        Wire { exp, val, life }
+        Wire {
+            exp,
+            val,
+            _life: PhantomData,
+        }
     }
 
     pub fn io(&self, _wire: Wire<F>) {
@@ -129,13 +135,17 @@ impl<'a, F: Field> ConstraintSystemRef<'a, F> {
     }
     pub fn wire(&self, var: VV<F>) -> Wire<'a, F> {
         // ───── ① RefMut のスコープをこのブロック内に閉じ込める
-        let (exp, val, life) = {
+        let (exp, val) = {
             let mut cs = self.0.borrow_mut(); // Ref 開始
             let wire = cs.wire(var);
-            (wire.exp, wire.val, cs.life)
+            (wire.exp, wire.val)
         }; // Ref 終了
 
-        Wire { exp, val, life } // 借用はもう存在しないので返せる
+        Wire {
+            exp,
+            val,
+            _life: PhantomData,
+        } // 借用はもう存在しないので返せる
     }
 
     pub fn link<T>(&self, vv: VV<F>, constant: T)
@@ -149,13 +159,17 @@ impl<'a, F: Field> ConstraintSystemRef<'a, F> {
     where
         F: From<T>,
     {
-        let (exp, val, life) = {
+        let (exp, val) = {
             let mut cs = self.0.borrow_mut(); // Ref 開始
             let wire = cs.alloc(val);
-            (wire.exp, wire.val, cs.life)
+            (wire.exp, wire.val)
         }; // Ref 終了
 
-        Wire { exp, val, life } // 借用はもう存在しないので返せる
+        Wire {
+            exp,
+            val,
+            _life: PhantomData,
+        } // 借用はもう存在しないので返せる
     }
 
     pub fn witnesses(&self) -> Vec<F> {

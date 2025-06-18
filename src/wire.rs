@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use ark_ff::Field;
 
 use crate::expr::Expr;
@@ -6,21 +8,24 @@ use crate::expr::Expr;
 pub struct Wire<'a, F: Field> {
     pub(crate) val: F,
     pub(crate) exp: usize,
-    pub(crate) life: &'a (),
+    // pub(crate) life: &'a (),
+    pub(crate) _life: PhantomData<&'a ()>,
 }
 
 #[derive(Clone)]
 pub struct V<'a, F: Field> {
     pub(crate) val: F,
     pub(crate) exp: Expr<F>,
-    pub(crate) life: &'a (),
+    // pub(crate) life: &'a (),
+    pub(crate) _life: PhantomData<&'a ()>,
 }
 
 #[derive(Clone)]
 pub struct VV<'a, F: Field> {
     pub(crate) val: F,
     pub(crate) exp: Expr<F>,
-    pub(crate) life: &'a (),
+    // pub(crate) life: &'a (),
+    pub(crate) _life: PhantomData<&'a ()>,
 }
 #[derive(Clone)]
 pub struct Coeff<F: Field>(pub F);
