@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::{
     iter::Sum,
     ops::{Add, AddAssign, Mul, Sub},
@@ -30,54 +31,13 @@ macro_rules! impl_op {
         impl<'a, F: Field> $trait<$rhs> for $lhs {
             type Output = $output;
             fn $method(self, rhs: $rhs) -> Self::Output {
-                let life = self.life;
+                // let life = self._life;
                 let (lhs_val, lhs_exp) = self.parse();
                 let (rhs_val, rhs_exp) = rhs.parse();
                 Self::Output {
                     exp: Expr::$trait(Box::new(lhs_exp), Box::new(rhs_exp)),
                     val: lhs_val.$method(rhs_val),
-                    life
-                }
-            }
-        }
-    };
-    (@coeff $trait:ident, $method:ident, $lhs:ty, $rhs:ty, $output:ty) => {
-        impl_op!(@coeff_self $trait, $method, $lhs, $rhs, $output);
-        impl_op!(@coeff_self $trait, $method, &$lhs, $rhs, $output);
-        impl_op!(@coeff_self $trait, $method, $lhs, &$rhs, $output);
-        impl_op!(@coeff_self $trait, $method, &$lhs, &$rhs, $output);
-
-        impl_op!(@coeff_rhs $trait, $method, $rhs, $lhs, $output);
-        impl_op!(@coeff_rhs $trait, $method, &$rhs, $lhs, $output);
-        impl_op!(@coeff_rhs $trait, $method, $rhs, &$lhs, $output);
-        impl_op!(@coeff_rhs $trait, $method, &$rhs, &$lhs, $output);
-    };
-    (@coeff_self $trait:ident, $method:ident, $lhs:ty, $rhs:ty, $output:ty) => {
-        impl<'a, F: Field> $trait<$rhs> for $lhs {
-            type Output = $output;
-            fn $method(self, rhs: $rhs) -> Self::Output {
-                let life = self.life;
-                let (lhs_val, lhs_exp) = self.parse();
-                let (rhs_val, rhs_exp) = rhs.parse();
-                Self::Output {
-                    exp: Expr::$trait(Box::new(lhs_exp), Box::new(rhs_exp)),
-                    val: lhs_val.$method(rhs_val),
-                    life
-                }
-            }
-        }
-    };
-    (@coeff_rhs $trait:ident, $method:ident, $lhs:ty, $rhs:ty, $output:ty) => {
-        impl<'a, F: Field> $trait<$rhs> for $lhs {
-            type Output = $output;
-            fn $method(self, rhs: $rhs) -> Self::Output {
-                let life = rhs.life;
-                let (lhs_val, lhs_exp) = self.parse();
-                let (rhs_val, rhs_exp) = rhs.parse();
-                Self::Output {
-                    exp: Expr::$trait(Box::new(lhs_exp), Box::new(rhs_exp)),
-                    val: lhs_val.$method(rhs_val),
-                    life
+                    _life: PhantomData,
                 }
             }
         }
@@ -132,38 +92,38 @@ impl_op!(Mul, mul, Wire<'a, F>, VV<'a, F>);
 impl_op!(Mul, mul, V<'a, F>, VV<'a, F>);
 impl_op!(Mul, mul, Wire<'a, F>, V<'a, F>, VV<'a, F>);
 //
-impl_op!(@coeff Mul, mul, Wire<'a, F>, bool, V<'a, F>);
-impl_op!(@coeff Mul, mul, Wire<'a, F>, u8, V<'a, F>);
-impl_op!(@coeff Mul, mul, Wire<'a, F>, u16, V<'a, F>);
-impl_op!(@coeff Mul, mul, Wire<'a, F>, u32, V<'a,F>);
-impl_op!(@coeff Mul, mul, Wire<'a, F>, u64, V<'a, F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, bool, V<'a, F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, u8, V<'a, F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, u16, V<'a,F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, u32, V<'a,F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, u64, V<'a,F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, bool, V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, u8, V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, u16, V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, u32, V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, u64, V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, bool, V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, u8, V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, u16, V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, u32, V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, u64, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, bool, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, u8, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, u16, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, u32, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, u64, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, bool, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, u8, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, u16, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, u32, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, u64, V<'a, F>);
 
-impl_op!(@coeff Mul, mul, Wire<'a, F>, i8,  V<'a, F>);
-impl_op!(@coeff Mul, mul, Wire<'a, F>, i16, V<'a, F>);
-impl_op!(@coeff Mul, mul, Wire<'a, F>, i32, V<'a, F>);
-impl_op!(@coeff Mul, mul, Wire<'a, F>, i64, V<'a, F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, i8,     V<'a, F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, i16,    V<'a, F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, i32,    V<'a, F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, i64,    V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, i8,    V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, i16,   V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, i32,   V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, i64,   V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, i8, V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, i16, V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, i32, V<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, i64, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, i8, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, i16, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, i32, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, i64, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, i8, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, i16, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, i32, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, i64, V<'a, F>);
 
-impl_op!(@coeff Mul, mul, Wire<'a, F>, Coeff<F>, V<'a, F>);
-impl_op!(@coeff Mul, mul, V<'a, F>, Coeff<F>, V<'a, F>);
-impl_op!(@coeff Mul, mul, VV<'a, F>, Coeff< F>, VV<'a, F>);
+impl_op!(Mul, mul, Wire<'a, F>, Coeff<F>, V<'a, F>);
+impl_op!(Mul, mul, V<'a, F>, Coeff<F>, V<'a, F>);
+impl_op!(Mul, mul, VV<'a, F>, Coeff<F>, VV<'a, F>);
 //
 
 impl<'a, F: Field> AddAssign<Wire<'a, F>> for V<'a, F> {
@@ -253,7 +213,7 @@ impl<F: Field> Parse<F> for u64 {
     }
 }
 
-impl<'a, F: Field> Parse<F> for Wire<'a, F> {
+impl<F: Field> Parse<F> for Wire<'_, F> {
     fn parse(&self) -> (F, Expr<F>) {
         let exp = self.exp.into();
         let val = self.val;
@@ -293,7 +253,7 @@ impl<F: Field> Parse<F> for i64 {
     }
 }
 
-impl<'a, F: Field> Parse<F> for V<'a, F> {
+impl<F: Field> Parse<F> for V<'_, F> {
     fn parse(&self) -> (F, Expr<F>) {
         let exp = self.exp.clone();
         let val = self.val;
@@ -301,7 +261,7 @@ impl<'a, F: Field> Parse<F> for V<'a, F> {
     }
 }
 
-impl<'a, F: Field> Parse<F> for VV<'a, F> {
+impl<F: Field> Parse<F> for VV<'_, F> {
     fn parse(&self) -> (F, Expr<F>) {
         let exp = self.exp.clone();
         let val = self.val;
@@ -311,9 +271,9 @@ impl<'a, F: Field> Parse<F> for VV<'a, F> {
 
 #[cfg(test)]
 mod tests {
-    use ark_bn254::Fr;
+    // use ark_bn254::Fr;
 
-    use crate::{Coeff, ConstraintSystem};
+    // use crate::{Coeff, ConstraintSystem};
 
     #[test]
     fn test_coeff() {

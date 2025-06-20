@@ -4,7 +4,7 @@ use crate::{ConstraintSystemRef, V, utils::enforce_bits, wire::Wire};
 
 #[derive(Clone)]
 pub struct SwitchboardSystem<'a, F: Field> {
-    cs: ConstraintSystemRef<'a, F>,
+    cs: &'a ConstraintSystemRef<'a, F>,
     turn_on: Wire<'a,F>,
     switches: Vec<Wire<'a, F>>,
     one: Wire<'a, F>,
@@ -13,7 +13,7 @@ pub struct SwitchboardSystem<'a, F: Field> {
 }
 
 impl<'a, F: Field> SwitchboardSystem<'a, F> {
-    pub fn new(cs: ConstraintSystemRef<'a, F>, turn_on: Wire<'a, F>) -> Self {
+    pub fn new(cs: &'a ConstraintSystemRef<'a, F>, turn_on: Wire<'a, F>) -> Self {
         Self {
             one: cs.one(), // 保存しておく。
             mode: cs.switch(),
@@ -24,7 +24,7 @@ impl<'a, F: Field> SwitchboardSystem<'a, F> {
         }
     }
 
-    pub fn set(&'a mut self, index: u64) -> ConstraintSystemRef<'a, F> {
+    pub fn set(&mut self, index: u64) -> &'a ConstraintSystemRef<'a, F> {
         // 順番にスイッチを割り当てているかを確認する。
         assert!(index == self.index);
         self.index += 1;
@@ -36,10 +36,10 @@ impl<'a, F: Field> SwitchboardSystem<'a, F> {
         let sw = self.cs.alloc(sw);
         self.switches.push(sw);
         self.cs.set_one(sw); // oneとswは同じ。ONなら1だし、OFFなら0になる。
-        self.cs.clone()
+        self.cs
     }
 
-    pub fn finialize(self) -> ConstraintSystemRef<'a, F> {
+    pub fn finialize(self) -> &'a ConstraintSystemRef<'a, F> {
         let cs = self.cs;
         cs.set_one(self.one); // csを元にもしておく。
         cs.set_switch(self.mode); //

@@ -41,18 +41,32 @@ impl<F: Field> From<F> for Coeff<F> {
     }
 }
 
-impl<'a, F: Field> Wire<'a, F> {
+impl<F: Field> Wire<'_, F> {
     pub fn raw(&self) -> F {
         self.val
     }
 }
-impl<'a, F: Field> V<'a, F> {
+impl<F: Field> V<'_, F> {
     pub fn raw(&self) -> F {
         self.val
     }
 }
-impl<'a, F: Field> VV<'a, F> {
+impl<F: Field> VV<'_, F> {
     pub fn raw(&self) -> F {
         self.val
     }
+}
+
+
+
+pub trait LinearVar<'a, F: Field> {
+
+}
+
+impl<'a, F: Field> LinearVar<'a, F>  for Wire<'a, F>{
+
+}
+
+impl<'a, F: Field> LinearVar<'a, F>  for V<'a, F>{
+
 }

@@ -12,6 +12,7 @@ use ark_ff::Field;
 // use expr::{Expr, R1CS, compile};
 // use wire::{VV, Wire};
 pub use expr::*;
+use itertools::Itertools;
 pub use wire::*;
 
 #[derive(Clone)]
@@ -24,7 +25,7 @@ pub(crate) struct ConstraintSystem<'a, F: Field> {
 }
 
 impl<'a, F: Field> ConstraintSystem<'a, F> {
-    pub fn new(_: &'a ()) -> Self {
+    pub fn new() -> Self {
         let one_idx = 0;
         Self {
             wires: vec![F::ONE],
@@ -103,14 +104,33 @@ impl<'a, F: Field> ConstraintSystem<'a, F> {
         let constraints = self.exprs.iter().map(|exp| compile(exp)).collect();
         R1CS(constraints)
     }
+
+    pub fn finalize(mut self, inputs: &[Wire<'a, F>]) -> Vec<F> {
+        let inputs: Vec<usize> = inputs
+            .iter()
+            .map(|w| w.exp) // 既存インデックス
+            .chain(std::iter::once(0)) // ONE (=0) を必ず追加
+            .unique() // 重複を取り除く  ← itertool
+            .sorted_unstable() // 昇順ソート      ← itertool
+            .collect();
+        let mut permu: Vec<usize> = (0..self.wires.len()).collect();
+        for (i, j) in inputs.into_iter().enumerate() {
+            permu.swap(i, j);
+            self.wires.swap(i, j);
+        }
+        for expr in self.exprs {
+            // todo premu
+        }
+        self.wires
+    }
 }
 
 #[derive(Clone)]
 pub struct ConstraintSystemRef<'a, F: Field>(Rc<RefCell<ConstraintSystem<'a, F>>>);
 
 impl<'a, F: Field> ConstraintSystemRef<'a, F> {
-    pub fn new(life: &'a ()) -> Self {
-        Self(Rc::new(RefCell::new(ConstraintSystem::new(life))))
+    pub fn new() -> Self {
+        Self(Rc::new(RefCell::new(ConstraintSystem::new())))
     }
 
     pub fn set_one(&self, one: Wire<F>) {

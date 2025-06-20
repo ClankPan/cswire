@@ -12,6 +12,16 @@ pub enum Expr<F> {
     Mul(Box<Expr<F>>, Box<Expr<F>>), // 乗算
 }
 
+#[derive(Clone, Debug)]
+pub enum AST<F> {
+    Idx(usize),
+    Con(F),                        // 係数
+    Add(usize), // 加算
+    Sub(usize), // 減算
+    Mul(usize), // 乗算
+}
+
+
 impl<F: Field> From<usize> for Expr<F> {
     fn from(idx: usize) -> Self {
         Expr::Idx(idx)

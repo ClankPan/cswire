@@ -384,8 +384,7 @@ mod tests {
         let ark_hash = sponge.squeeze_native_field_elements(1)[0];
 
         // cswireのposeidon
-        let life = ();
-        let cs = ConstraintSystemRef::new(&life);
+        let cs = ConstraintSystemRef::new();
         let config = circom_bn254_poseidon_canonical_config::<Fr>();
         let mut sponge = CWPoseidonSponge::<Fr>::new(cs.clone(), &config);
         for v in values.iter() {
