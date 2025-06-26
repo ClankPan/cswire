@@ -65,7 +65,7 @@ impl<'a, F: Field> Mul<FF<F>> for Lin<'a, F> {
     fn mul(self, rhs: FF<F>) -> Self::Output {
         Self::Output {
             value: self.raw().mul(rhs.0),
-            expr: self.expr().mul(Expr::constant(rhs.0)),
+            expr: self.expr().mul(Expr::coefficient(rhs.0)),
             _life: PhantomData,
         }
     }
@@ -76,7 +76,7 @@ impl<'a, F: Field> Mul<Lin<'a, F>> for FF<F> {
     fn mul(self, rhs: Lin<'a, F>) -> Self::Output {
         Self::Output {
             value: self.0.mul(rhs.raw()),
-            expr: Expr::constant(self.0).mul(rhs.expr()),
+            expr: Expr::coefficient(self.0).mul(rhs.expr()),
             _life: PhantomData,
         }
     }
@@ -88,7 +88,7 @@ impl<'a, F: Field> Mul<FF<F>> for &Lin<'a, F> {
         Self::Output {
             // value: Quadratic::<F>::raw(&self).mul(rhs.0),
             value: self.raw().mul(rhs.0),
-            expr: self.expr().mul(Expr::constant(rhs.0)),
+            expr: self.expr().mul(Expr::coefficient(rhs.0)),
             _life: PhantomData,
         }
     }
@@ -99,7 +99,7 @@ impl<'a, F: Field> Mul<&Lin<'a, F>> for FF<F> {
     fn mul(self, rhs: &Lin<'a, F>) -> Self::Output {
         Self::Output {
             value: self.0.mul(rhs.raw()),
-            expr: Expr::constant(self.0).mul(rhs.expr()),
+            expr: Expr::coefficient(self.0).mul(rhs.expr()),
             _life: PhantomData,
         }
     }

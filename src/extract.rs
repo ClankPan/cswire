@@ -74,7 +74,7 @@ macro_rules! impl_linear {
 
         impl<F: Field> ToExpr<F> for $primitive {
             fn expr(&self) -> Expr<F> {
-                Expr::constant(*self)
+                Expr::coefficient(*self)
             }
         }
     };
@@ -87,7 +87,7 @@ macro_rules! impl_linear {
         impl<F: Field> ToExpr<F> for &$primitive {
 
             fn expr(&self) -> Expr<F> {
-                Expr::constant(**self)
+                Expr::coefficient(**self)
             }
         }
     };
