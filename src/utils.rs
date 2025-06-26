@@ -35,3 +35,12 @@ pub fn is_zero<'a, F: Field>(cs: &'a CSWire<F>, v: &Lin<'a, F>) -> Lin<'a, F> {
     cs.equal(v * &q, 0);
     q
 }
+
+pub fn select<'a, F: Field>(
+    cs: &'a CSWire<F>,
+    cond: &Lin<'a, F>,
+    fist: &Lin<'a, F>,
+    second: &Lin<'a, F>,
+) -> Lin<'a, F> {
+    cs.wire(cond * fist) + cs.wire((cs.one() - cond) * second)
+}
