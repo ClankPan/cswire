@@ -6,7 +6,7 @@ use std::{
 
 use ark_ff::Field;
 
-use crate::{Coeff, Expr, V, VV, Wire};
+use crate::{AST, Coeff, Expr, V, VV, Wire};
 
 macro_rules! impl_op {
     ($trait:ident, $method:ident, $lhs:ty, $output:ty) => {
@@ -31,11 +31,21 @@ macro_rules! impl_op {
         impl<'a, F: Field> $trait<$rhs> for $lhs {
             type Output = $output;
             fn $method(self, rhs: $rhs) -> Self::Output {
-                // let life = self._life;
                 let (lhs_val, lhs_exp) = self.parse();
                 let (rhs_val, rhs_exp) = rhs.parse();
+
+                // let mut exp = Vec::with_capacity(1 + lhs_exp.0.len() + rhs_exp.0.len());
+                // exp.push(AST::$trait(1+lhs_exp.0.len()));
+                // exp.extend(lhs_exp.0);
+                // exp.extend(rhs_exp.0);
+                // let nodes: Vec<AST<F>> = iter::once(AST::$trait(lhs_exp.0.len())) // 操作
+                //     .chain(lhs_exp.0) // 左ノード
+                //     .chain(rhs_exp.0) // 右ノード
+                //     .collect();
+
                 Self::Output {
-                    exp: Expr::$trait(Box::new(lhs_exp), Box::new(rhs_exp)),
+                    // exp: Expr::$trait(Box::new(lhs_exp), Box::new(rhs_exp)),
+                    exp: lhs_exp.$method(rhs_exp),
                     val: lhs_val.$method(rhs_val),
                     _life: PhantomData,
                 }
@@ -167,7 +177,7 @@ trait Parse<F: Field> {
 
 impl<F: Field> Parse<F> for Coeff<F> {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con(self.0);
+        let exp = Expr(vec![AST::Con(self.0)]);
         let val = self.0;
         (val, exp)
     }
@@ -175,7 +185,7 @@ impl<F: Field> Parse<F> for Coeff<F> {
 
 impl<F: Field> Parse<F> for bool {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
@@ -183,7 +193,7 @@ impl<F: Field> Parse<F> for bool {
 
 impl<F: Field> Parse<F> for u8 {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
@@ -191,7 +201,7 @@ impl<F: Field> Parse<F> for u8 {
 
 impl<F: Field> Parse<F> for u16 {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
@@ -199,7 +209,7 @@ impl<F: Field> Parse<F> for u16 {
 
 impl<F: Field> Parse<F> for u32 {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
@@ -207,7 +217,7 @@ impl<F: Field> Parse<F> for u32 {
 
 impl<F: Field> Parse<F> for u64 {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
@@ -223,7 +233,7 @@ impl<F: Field> Parse<F> for Wire<'_, F> {
 
 impl<F: Field> Parse<F> for i8 {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
@@ -231,7 +241,7 @@ impl<F: Field> Parse<F> for i8 {
 
 impl<F: Field> Parse<F> for i16 {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
@@ -239,7 +249,7 @@ impl<F: Field> Parse<F> for i16 {
 
 impl<F: Field> Parse<F> for i32 {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
@@ -247,7 +257,7 @@ impl<F: Field> Parse<F> for i32 {
 
 impl<F: Field> Parse<F> for i64 {
     fn parse(&self) -> (F, Expr<F>) {
-        let exp = Expr::Con((*self).into());
+        let exp = Expr(vec![AST::Con((*self).into())]);
         let val = F::from(*self);
         (val, exp)
     }
