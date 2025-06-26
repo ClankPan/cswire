@@ -30,3 +30,12 @@ impl<'a, F: Field> Alloc<'a, F> for (F, F) {
         (cs.alloc(self.0), cs.alloc(self.1))
     }
 }
+
+
+impl<'a, F: Field> Alloc<'a, F> for [F;2] {
+    type Output = [Lin<'a, F>;2];
+
+    fn alloc(&self, cs: &'a CSWire<F>) -> Self::Output {
+        [self[0].alloc(cs), self[1].alloc(cs)]
+    }
+}
