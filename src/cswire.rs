@@ -111,7 +111,17 @@ impl<F: Field> CSWire<F> {
         self.one.replace(static_lin)
     }
 
-    pub fn finish<Q: Quadratic<F>>(self, io: &[Q]) {}
+    pub fn finish<Q: Quadratic<F> + ToRaw<F> + ToExpr<F>>(self, io: Vec<Q>) {
+        let io: Vec<_> = io
+            .into_iter()
+            .map(|i| match self.wire(i).expr() {
+                Expr::Idx(idx) => idx,
+                _ => unreachable!("wire() should return Expr::Idx as its expr"),
+            })
+            .collect();
+        
+
+    }
 }
 
 #[cfg(test)]
