@@ -1,9 +1,10 @@
 use std::{cell::RefCell, marker::PhantomData};
 
 use ark_ff::Field;
+use itertools::Itertools;
 
 use crate::{
-    Expr,
+    ASTs, Expr,
     binary_ops::FF,
     extract::{ToExpr, ToRaw},
     linear::Linear,
@@ -111,17 +112,64 @@ impl<F: Field> CSWire<F> {
         self.one.replace(static_lin)
     }
 
-    pub fn finish<Q: Quadratic<F> + ToRaw<F> + ToExpr<F>>(self, io: Vec<Q>) {
+    pub fn finish<Q: Quadratic<F> + ToRaw<F> + ToExpr<F> + Clone>(
+        &self,
+        io: &[Q],
+    ) -> (Vec<F>, ASTs<F>) {
         let io: Vec<_> = io
-            .into_iter()
+            .iter()
+            .cloned()
             .map(|i| match self.wire(i).expr() {
                 Expr::Idx(idx) => idx,
                 _ => unreachable!("wire() should return Expr::Idx as its expr"),
             })
+            .chain(std::iter::once(0)) // ONE を指すwitnessはからならず、先頭にくるように追加
+            .unique() // 重複を取り除く
+            .sorted_unstable() // 昇順ソート
             .collect();
-        
+        let exprs = self.exprs.borrow().clone();
+        let mut witness = self.witness.borrow().clone();
+        let mut permu: Vec<usize> = (0..witness.len()).collect();
+        for (i, j) in io.into_iter().enumerate() {
+            permu.swap(i, j);
+            witness.swap(i, j);
+        }
 
+        (witness, ASTs { permu, exprs })
     }
+
+    // pub fn finalize(mut self, inputs: &[Wire<'a, F>]) -> (Vec<F>, Vec<Expr<F>>) {
+    //     // ユーザが指定したinputにするWireを先頭の方に持ってくる。
+    //     // 今ココで返すWitnessの順番と、Exprが指定するWitnessの場所が合うようにする。
+    //     let inputs: Vec<usize> = inputs
+    //         .iter()
+    //         .map(|w| w.exp) // 既存インデックス
+    //         .chain(std::iter::once(0)) // ONE (=0) を必ず追加
+    //         .unique() // 重複を取り除く
+    //         .sorted_unstable() // 昇順ソート
+    //         .collect();
+    //     let mut permu: Vec<usize> = (0..self.wires.len()).collect();
+    //     for (i, j) in inputs.into_iter().enumerate() {
+    //         permu.swap(i, j);
+    //         self.wires.swap(i, j);
+    //     }
+    //     let exprs = self
+    //         .exprs
+    //         .into_iter()
+    //         .map(|expr| {
+    //             let nodes: Vec<AST<F>> = expr
+    //                 .0
+    //                 .into_iter()
+    //                 .map(|node| match node {
+    //                     AST::Idx(n) => AST::Idx(permu[n]),
+    //                     _ => node,
+    //                 })
+    //                 .collect();
+    //             Expr(nodes)
+    //         })
+    //         .collect();
+    //     (self.wires, exprs)
+    // }
 }
 
 #[cfg(test)]
