@@ -57,79 +57,95 @@ impl<F: Field> Mul for Expr<F> {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
-pub enum Term {
-    Coeff,
-    Linear(usize),
-    Quadratic(usize, usize),
+#[derive(Debug)]
+pub enum Term<F: Field> {
+    Coeff(F),
+    Linear(HashMap<usize, F>),
+    Quadratic(Vec<(usize, F)>, Vec<(usize, F)>, F, HashMap<usize, F>),
 }
 
-pub fn parse<F: Field>(expr: &Expr<F>) -> HashMap<Term, F> {
+pub fn parse<F: Field>(expr: &Expr<F>) -> Term<F> {
     match expr {
-        Expr::Coeff(coeff) => HashMap::from([(Term::Coeff, *coeff)]),
-        Expr::Idx(i) => HashMap::from([(Term::Linear(*i), F::ONE)]),
-        Expr::Add(left, right) => {
-            let (mut left, right) = (parse(left), parse(right));
-            for (term, coeff) in right.into_iter() {
-                left.entry(term)
-                    .and_modify(|existing_coeff| {
-                        *existing_coeff += coeff;
-                    })
-                    .or_insert(coeff);
+        Expr::Coeff(coeff) => Term::Coeff(*coeff),
+        Expr::Idx(i) => Term::Linear(HashMap::from([(*i, F::ONE)])),
+        Expr::Mul(left, right) => match (parse(left), parse(right)) {
+            (Term::Coeff(coeff1), Term::Coeff(coeff2)) => Term::Coeff(coeff1 * coeff2),
+            (Term::Coeff(coeff), Term::Linear(mut map))
+            | (Term::Linear(mut map), Term::Coeff(coeff)) => {
+                map.iter_mut().for_each(|(_, f)| *f *= coeff);
+                Term::Linear(map)
             }
-            left
-        }
-        Expr::Sub(left, right) => {
-            let (mut left, right) = (parse(left), parse(right));
-            for (term, coeff) in right.into_iter() {
-                left.entry(term)
-                    .and_modify(|existing_coeff| {
-                        *existing_coeff -= coeff;
-                    })
-                    .or_insert(-coeff);
+            (Term::Coeff(coeff), Term::Quadratic(a, b, f, mut lc))
+            | (Term::Quadratic(a, b, f, mut lc), Term::Coeff(coeff)) => {
+                lc.iter_mut().for_each(|(_, f)| *f *= coeff);
+                Term::Quadratic(a, b, f * coeff, lc)
             }
-            left
-        }
-        Expr::Mul(left, right) => {
-            let (left, right) = (parse(left), parse(right));
-
-            println!("\nleft: {:?}\n", left);
-            println!("\nright: {:?}\n", right);
-
-            let mut map = HashMap::new();
-
-            for (term1, coeff1) in left.iter() {
-                for (term2, coeff2) in right.iter() {
-                    let term = match (term1, term2) {
-                        (Term::Coeff, Term::Coeff) => Term::Coeff,
-                        (Term::Coeff, Term::Linear(j)) => Term::Linear(*j),
-                        (Term::Linear(i), Term::Coeff) => Term::Linear(*i),
-                        (Term::Linear(i), Term::Linear(j)) => {
-                            let (l, r) = if i <= j { (*i, *j) } else { (*j, *i) };
-                            Term::Quadratic(l, r)
-                        }
-                        (Term::Coeff, Term::Quadratic(i, j)) => Term::Quadratic(*i, *j),
-                        (Term::Quadratic(i, j), Term::Coeff) => Term::Quadratic(*i, *j),
-                        (Term::Linear(_), Term::Quadratic(_, _)) => todo!(),
-                        (Term::Quadratic(_, _), Term::Linear(_)) => todo!(),
-                        (Term::Quadratic(_, _), Term::Quadratic(_, _)) => todo!(),
-                    };
-
-                    // *map.entry(term).or_insert(F::ZERO) += *coeff1 * *coeff2;
-                    let coeff = *coeff1 * *coeff2;
-                    map.entry(term).and_modify(|c| *c += coeff).or_insert(coeff);
-                }
+            (Term::Linear(a), Term::Linear(b)) => Term::Quadratic(
+                a.into_iter().collect(),
+                b.into_iter().collect(),
+                F::ONE,
+                HashMap::new(),
+            ),
+            (Term::Linear(_), Term::Quadratic(_, _, _, _))
+            | (Term::Quadratic(_, _, _, _), Term::Linear(_)) => panic!(),
+            (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
+        },
+        Expr::Add(left, right) => match (parse(left), parse(right)) {
+            (Term::Coeff(_), Term::Coeff(_)) => panic!(),
+            (Term::Coeff(_), Term::Linear(_)) => panic!(),
+            (Term::Coeff(_), Term::Quadratic(_, _, _, _)) => panic!(),
+            (Term::Linear(_), Term::Coeff(_)) => panic!(),
+            (Term::Linear(lc1), Term::Linear(lc2)) => Term::Linear(add_two_lc(lc1, lc2)),
+            (Term::Linear(lc1), Term::Quadratic(a, b, f, lc2))
+            | (Term::Quadratic(a, b, f, lc2), Term::Linear(lc1)) => {
+                Term::Quadratic(a, b, f, add_two_lc(lc1, lc2))
             }
-            map
-        }
+            (Term::Quadratic(_, _, _, _), Term::Coeff(_)) => panic!(),
+            (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
+        },
+        Expr::Sub(left, right) => match (parse(left), parse(right)) {
+            (Term::Coeff(_), Term::Coeff(_)) => panic!(),
+            (Term::Coeff(_), Term::Linear(_)) => panic!(),
+            (Term::Coeff(_), Term::Quadratic(_, _, _, _)) => panic!(),
+            (Term::Linear(_), Term::Coeff(_)) => panic!(),
+            (Term::Linear(lc1), Term::Linear(lc2)) => Term::Linear(add_two_lc(lc1, lc2)),
+            (Term::Linear(lc1), Term::Quadratic(a, b, f, lc2))
+            | (Term::Quadratic(a, b, f, lc2), Term::Linear(lc1)) => {
+                Term::Quadratic(a, b, f, add_two_lc(lc1, lc2))
+            }
+            (Term::Quadratic(_, _, _, _), Term::Coeff(_)) => panic!(),
+            (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
+        },
     }
+}
+
+fn add_two_lc<F: Field>(mut lc1: HashMap<usize, F>, lc2: HashMap<usize, F>) -> HashMap<usize, F> {
+    for (i, coeff) in lc2.into_iter() {
+        lc1.entry(i)
+            .and_modify(|existing_coeff| {
+                *existing_coeff += coeff;
+            })
+            .or_insert(coeff);
+    }
+    lc1
+}
+
+fn sub_two_lc<F: Field>(mut lc1: HashMap<usize, F>, lc2: HashMap<usize, F>) -> HashMap<usize, F> {
+    for (i, coeff) in lc2.into_iter() {
+        lc1.entry(i)
+            .and_modify(|existing_coeff| {
+                *existing_coeff -= coeff;
+            })
+            .or_insert(-coeff);
+    }
+    lc1
 }
 
 #[derive(Debug, Clone)]
 pub struct Constraint<F>(
-    pub Vec<(F, usize)>,
-    pub Vec<(F, usize)>,
-    pub Vec<(F, usize)>,
+    pub Vec<(usize, F)>,
+    pub Vec<(usize, F)>,
+    pub Vec<(usize, F)>,
 );
 
 #[derive(Debug, Clone)]
@@ -164,38 +180,27 @@ impl<F: Field> ASTs<F> {
         R1CS(constraints)
     }
 
-    fn permutate(&self, a: &mut [(F, usize)]) {
+    fn permutate(&self, a: &mut [(usize, F)]) {
         // ① インデックスを書き換え
-        a.iter_mut().for_each(|(_, idx)| *idx = self.permu[*idx]);
+        a.iter_mut().for_each(|(idx, _)| *idx = self.permu[*idx]);
 
         // ② idx でソート
         a.sort_by_key(|&(_, idx)| idx);
     }
 
     fn convert(exp: &Expr<F>) -> Constraint<F> {
-        let map = parse(exp);
+        let term = parse(exp);
 
-        println!("{:?}\n", map);
-
-        let mut a = Vec::new();
-        let mut b = Vec::new();
-        let mut c = Vec::new();
-
-        // Quaraticがあれば、a,bに入れて、残りのLinearをcに入れる。
-        // 全てLinearなら、全てcに入れて、a,bを0*0にする。
-        for (term, coeff) in map.into_iter() {
-            match term {
-                Term::Coeff => panic!("[error] 係数だけで存在してしまっている"),
-                // Term::Linear(i) => c.push((-coeff, i)),
-                Term::Linear(i) => c.push((coeff, i)),
-                Term::Quadratic(i, j) => {
-                    a.push((coeff, i));
-                    b.push((F::ONE, j));
-                }
+        match term {
+            Term::Coeff(_) => todo!(),
+            Term::Linear(c) => Constraint(vec![], vec![], c.into_iter().collect()),
+            Term::Quadratic(a, b, coeff, c) => {
+                let a = a.into_iter().map(|(i, f)| (i, f * coeff)).collect();
+                let b = b.into_iter().collect();
+                let c = c.into_iter().collect();
+                Constraint(a, b, c)
             }
         }
-
-        Constraint(a, b, c)
     }
 }
 
@@ -203,9 +208,9 @@ impl<F: Field> ASTs<F> {
 
 impl<F: PrimeField> Display for Constraint<F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let show = |vec: &[(F, usize)]| {
+        let show = |vec: &[(usize,F)]| {
             vec.iter()
-                .map(|(c, i)| format!("({}, {})", I32Coeff(*c), i))
+                .map(|(i,c)| format!("({}, {})", I32Coeff(*c), i))
                 .collect::<Vec<_>>()
                 .join(", ")
         };
