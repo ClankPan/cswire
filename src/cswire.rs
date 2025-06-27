@@ -65,6 +65,16 @@ impl<F: Field> CSWire<F> {
     }
 
     pub fn wire<Q: Quadratic<F> + ToRaw<F> + ToExpr<F>>(&self, var: Q) -> Lin<'_, F> {
+        if let Expr::Idx(i) = var.expr() {
+            // もし、exprが何の線型結合でなければ(Witnessそのもの)
+            // そのままを返す
+            return Lin {
+                value: var.raw(),
+                expr: Expr::Idx(i),
+                _life: PhantomData,
+            };
+        }
+
         let new_var = self.alloc(var.raw());
         self.exprs
             .borrow_mut()
@@ -100,6 +110,8 @@ impl<F: Field> CSWire<F> {
         };
         self.one.replace(static_lin)
     }
+
+    pub fn finish<Q: Quadratic<F>>(self, io: &[Q]) {}
 }
 
 #[cfg(test)]

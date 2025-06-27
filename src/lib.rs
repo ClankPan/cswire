@@ -9,6 +9,9 @@ pub mod assign;
 pub mod alloc;
 pub mod extract;
 
+#[cfg(test)]
+mod tests;
+
 pub use cswire::*;
 pub use expr::*;
 pub use linear::*;
