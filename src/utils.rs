@@ -16,7 +16,7 @@ pub fn pow<'a, F: Field>(cs: &'a CSWire<F>, mut base: Lin<'a, F>, mut exp: u64) 
 }
 
 pub fn enforce_bits<'a, F: Field>(cs: &'a CSWire<F>, bits: &[Lin<'a, F>]) {
-    bits.iter().for_each(|b| cs.equal((cs.one() - b) * b, 0));
+    bits.iter().for_each(|b| cs.equal((cs.one() - b) * b, cs.constant(0)));
 }
 
 pub fn is_zero<'a, F: Field>(cs: &'a CSWire<F>, v: &Lin<'a, F>) -> Lin<'a, F> {
@@ -32,7 +32,7 @@ pub fn is_zero<'a, F: Field>(cs: &'a CSWire<F>, v: &Lin<'a, F>) -> Lin<'a, F> {
     };
 
     cs.equal(v * z, cs.one() - &q);
-    cs.equal(v * &q, 0);
+    cs.equal(v * &q, cs.constant(0));
     q
 }
 

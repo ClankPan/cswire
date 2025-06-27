@@ -112,9 +112,9 @@ impl<F: Field> CSWire<F> {
         self.one.replace(static_lin)
     }
 
-    pub fn finish<Q: Quadratic<F> + ToRaw<F> + ToExpr<F> + Clone>(
-        &self,
-        io: &[Q],
+    pub fn finish<'a>(
+        &'a self,
+        io: &[Lin<'a,F>],
     ) -> (Vec<F>, ASTs<F>) {
         let io: Vec<_> = io
             .iter()
@@ -191,8 +191,8 @@ mod tests {
             // let one = cs.set_one(one);
             var = cs.one();
 
-            cs.equal(&a + &b, 0);
-            cs.equal(0, &a + &b);
+            cs.equal(&a + &b, cs.constant(0));
+            cs.equal(cs.constant(0), &a + &b);
             cs.equal(&a + &b, &a + &b);
             cs.equal(&c * (&a + &b), &a + &b);
 
