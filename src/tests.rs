@@ -19,9 +19,10 @@ pub fn test_fibonacci() {
     // }
 
     // let (witness, asts) = cs.finish(&[a]);
-    let (witness, asts) = cs.finish(&[]);
+    let (witness, asts) = cs.finish(&[b]);
     let r1cs = asts.compile();
 
     println!("{}", r1cs);
     println!("{:?}", witness);
+    println!("is_satisfied {}", r1cs.is_satisfied(&witness));
 }

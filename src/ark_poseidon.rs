@@ -313,6 +313,16 @@ impl<'a, F: PrimeField> PoseidonSponge<'a, F> {
     }
 }
 
+pub trait Absorbable<'a, F: PrimeField> {
+    fn to_vec(&self) -> Vec<Lin<'a, F>>;
+}
+
+impl<'a, F: PrimeField> Absorbable<'a,F> for Lin<'a,F> {
+    fn to_vec(&self) -> Vec<Lin<'a, F>> {
+       vec![self.clone()] 
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ark_bn254::Fr;

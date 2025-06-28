@@ -7,7 +7,7 @@ use std::{
     rc::Rc,
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Expr<F> {
     Coeff(F),
     Idx(usize),
@@ -69,7 +69,7 @@ pub fn parse<F: Field>(expr: &Expr<F>) -> Term<F> {
         Expr::Coeff(coeff) => Term::Coeff(*coeff),
         Expr::Idx(i) => Term::Linear(HashMap::from([(*i, F::ONE)])),
         Expr::Mul(left, right) => {
-            println!("mul");
+            // println!("mul");
             match (parse(left), parse(right)) {
                 (Term::Coeff(coeff1), Term::Coeff(coeff2)) => Term::Coeff(coeff1 * coeff2),
                 (Term::Coeff(coeff), Term::Linear(mut map))
@@ -95,7 +95,7 @@ pub fn parse<F: Field>(expr: &Expr<F>) -> Term<F> {
         }
 
         Expr::Add(left, right) => {
-            println!("add");
+            // println!("add");
             match (parse(left), parse(right)) {
                 (Term::Coeff(_), Term::Coeff(_)) => panic!(),
                 (Term::Coeff(_), Term::Linear(_)) => panic!(),
@@ -112,7 +112,7 @@ pub fn parse<F: Field>(expr: &Expr<F>) -> Term<F> {
         }
 
         Expr::Sub(left, right) => {
-            println!("sub");
+            // println!("sub");
             match (parse(left), parse(right)) {
                 (Term::Coeff(_), Term::Coeff(_)) => panic!(),
                 (Term::Coeff(_), Term::Linear(_)) => panic!(),
@@ -171,6 +171,17 @@ impl<F: Field> R1CS<F> {
     pub fn optimize(&mut self) {
         todo!();
     }
+    pub fn is_satisfied(&self, w: &[F]) -> bool {
+        for constraint in &self.0 {
+            let a: F = constraint.0.iter().map(|(i, coef)| w[*i] * coef).sum();
+            let b: F = constraint.1.iter().map(|(i, coef)| w[*i] * coef).sum();
+            let c: F = constraint.2.iter().map(|(i, coef)| w[*i] * coef).sum();
+            if a * b - c != F::ZERO {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 impl<F: Field> ASTs<F> {
@@ -204,11 +215,15 @@ impl<F: Field> ASTs<F> {
 
         match term {
             Term::Coeff(_) => todo!(),
-            Term::Linear(c) => Constraint(vec![], vec![], c.into_iter().collect()),
+            Term::Linear(c) => Constraint(
+                vec![],
+                vec![],
+                c.into_iter().map(|(i, f)| (i, -f)).collect(),
+            ),
             Term::Quadratic(a, b, coeff, c) => {
                 let a = a.into_iter().map(|(i, f)| (i, f * coeff)).collect();
                 let b = b.into_iter().collect();
-                let c = c.into_iter().collect();
+                let c = c.into_iter().map(|(i, f)| (i, -f)).collect();
                 Constraint(a, b, c)
             }
         }

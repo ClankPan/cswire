@@ -13,14 +13,14 @@ use crate::{
 pub type V<'a, F> = Lin<'a, F>;
 pub type VV<'a, F> = Qua<'a, F>;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Lin<'a, F: Field> {
     pub(crate) value: F,
     pub(crate) expr: Expr<F>,
     pub(crate) _life: PhantomData<&'a ()>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Qua<'a, F: Field> {
     pub(crate) value: F,
     pub(crate) expr: Expr<F>,
