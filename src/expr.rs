@@ -68,54 +68,65 @@ pub fn parse<F: Field>(expr: &Expr<F>) -> Term<F> {
     match expr {
         Expr::Coeff(coeff) => Term::Coeff(*coeff),
         Expr::Idx(i) => Term::Linear(HashMap::from([(*i, F::ONE)])),
-        Expr::Mul(left, right) => match (parse(left), parse(right)) {
-            (Term::Coeff(coeff1), Term::Coeff(coeff2)) => Term::Coeff(coeff1 * coeff2),
-            (Term::Coeff(coeff), Term::Linear(mut map))
-            | (Term::Linear(mut map), Term::Coeff(coeff)) => {
-                map.iter_mut().for_each(|(_, f)| *f *= coeff);
-                Term::Linear(map)
+        Expr::Mul(left, right) => {
+            println!("mul");
+            match (parse(left), parse(right)) {
+                (Term::Coeff(coeff1), Term::Coeff(coeff2)) => Term::Coeff(coeff1 * coeff2),
+                (Term::Coeff(coeff), Term::Linear(mut map))
+                | (Term::Linear(mut map), Term::Coeff(coeff)) => {
+                    map.iter_mut().for_each(|(_, f)| *f *= coeff);
+                    Term::Linear(map)
+                }
+                (Term::Coeff(coeff), Term::Quadratic(a, b, f, mut lc))
+                | (Term::Quadratic(a, b, f, mut lc), Term::Coeff(coeff)) => {
+                    lc.iter_mut().for_each(|(_, f)| *f *= coeff);
+                    Term::Quadratic(a, b, f * coeff, lc)
+                }
+                (Term::Linear(a), Term::Linear(b)) => Term::Quadratic(
+                    a.into_iter().collect(),
+                    b.into_iter().collect(),
+                    F::ONE,
+                    HashMap::new(),
+                ),
+                (Term::Linear(_), Term::Quadratic(_, _, _, _))
+                | (Term::Quadratic(_, _, _, _), Term::Linear(_)) => panic!(),
+                (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
             }
-            (Term::Coeff(coeff), Term::Quadratic(a, b, f, mut lc))
-            | (Term::Quadratic(a, b, f, mut lc), Term::Coeff(coeff)) => {
-                lc.iter_mut().for_each(|(_, f)| *f *= coeff);
-                Term::Quadratic(a, b, f * coeff, lc)
+        }
+
+        Expr::Add(left, right) => {
+            println!("add");
+            match (parse(left), parse(right)) {
+                (Term::Coeff(_), Term::Coeff(_)) => panic!(),
+                (Term::Coeff(_), Term::Linear(_)) => panic!(),
+                (Term::Coeff(_), Term::Quadratic(_, _, _, _)) => panic!(),
+                (Term::Linear(_), Term::Coeff(_)) => panic!(),
+                (Term::Linear(lc1), Term::Linear(lc2)) => Term::Linear(add_two_lc(lc1, lc2)),
+                (Term::Linear(lc1), Term::Quadratic(a, b, f, lc2))
+                | (Term::Quadratic(a, b, f, lc1), Term::Linear(lc2)) => {
+                    Term::Quadratic(a, b, f, add_two_lc(lc1, lc2))
+                }
+                (Term::Quadratic(_, _, _, _), Term::Coeff(_)) => panic!(),
+                (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
             }
-            (Term::Linear(a), Term::Linear(b)) => Term::Quadratic(
-                a.into_iter().collect(),
-                b.into_iter().collect(),
-                F::ONE,
-                HashMap::new(),
-            ),
-            (Term::Linear(_), Term::Quadratic(_, _, _, _))
-            | (Term::Quadratic(_, _, _, _), Term::Linear(_)) => panic!(),
-            (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
-        },
-        Expr::Add(left, right) => match (parse(left), parse(right)) {
-            (Term::Coeff(_), Term::Coeff(_)) => panic!(),
-            (Term::Coeff(_), Term::Linear(_)) => panic!(),
-            (Term::Coeff(_), Term::Quadratic(_, _, _, _)) => panic!(),
-            (Term::Linear(_), Term::Coeff(_)) => panic!(),
-            (Term::Linear(lc1), Term::Linear(lc2)) => Term::Linear(add_two_lc(lc1, lc2)),
-            (Term::Linear(lc1), Term::Quadratic(a, b, f, lc2))
-            | (Term::Quadratic(a, b, f, lc2), Term::Linear(lc1)) => {
-                Term::Quadratic(a, b, f, add_two_lc(lc1, lc2))
+        }
+
+        Expr::Sub(left, right) => {
+            println!("sub");
+            match (parse(left), parse(right)) {
+                (Term::Coeff(_), Term::Coeff(_)) => panic!(),
+                (Term::Coeff(_), Term::Linear(_)) => panic!(),
+                (Term::Coeff(_), Term::Quadratic(_, _, _, _)) => panic!(),
+                (Term::Linear(_), Term::Coeff(_)) => panic!(),
+                (Term::Linear(lc1), Term::Linear(lc2)) => Term::Linear(sub_two_lc(lc1, lc2)),
+                (Term::Linear(lc1), Term::Quadratic(a, b, f, lc2))
+                | (Term::Quadratic(a, b, f, lc1), Term::Linear(lc2)) => {
+                    Term::Quadratic(a, b, f, sub_two_lc(lc1, lc2))
+                }
+                (Term::Quadratic(_, _, _, _), Term::Coeff(_)) => panic!(),
+                (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
             }
-            (Term::Quadratic(_, _, _, _), Term::Coeff(_)) => panic!(),
-            (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
-        },
-        Expr::Sub(left, right) => match (parse(left), parse(right)) {
-            (Term::Coeff(_), Term::Coeff(_)) => panic!(),
-            (Term::Coeff(_), Term::Linear(_)) => panic!(),
-            (Term::Coeff(_), Term::Quadratic(_, _, _, _)) => panic!(),
-            (Term::Linear(_), Term::Coeff(_)) => panic!(),
-            (Term::Linear(lc1), Term::Linear(lc2)) => Term::Linear(add_two_lc(lc1, lc2)),
-            (Term::Linear(lc1), Term::Quadratic(a, b, f, lc2))
-            | (Term::Quadratic(a, b, f, lc2), Term::Linear(lc1)) => {
-                Term::Quadratic(a, b, f, add_two_lc(lc1, lc2))
-            }
-            (Term::Quadratic(_, _, _, _), Term::Coeff(_)) => panic!(),
-            (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
-        },
+        }
     }
 }
 
@@ -208,9 +219,9 @@ impl<F: Field> ASTs<F> {
 
 impl<F: PrimeField> Display for Constraint<F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let show = |vec: &[(usize,F)]| {
+        let show = |vec: &[(usize, F)]| {
             vec.iter()
-                .map(|(i,c)| format!("({}, {})", I32Coeff(*c), i))
+                .map(|(i, c)| format!("(w:{}, {})", i, I32Coeff(*c)))
                 .collect::<Vec<_>>()
                 .join(", ")
         };

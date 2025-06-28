@@ -57,6 +57,19 @@ impl_op!(Mul, mul, Lin<'a, F>, i32, Lin<'a, F>);
 impl_op!(Mul, mul, Lin<'a, F>, i64, Lin<'a, F>);
 impl_op!(Mul, mul, Lin<'a, F>, i128, Lin<'a, F>);
 
+impl_op!(Mul, mul, Qua<'a, F>, bool, Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, u8,   Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, u16,  Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, u32,  Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, u64,  Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, u128, Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, i8,   Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, i16,  Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, i32,  Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, i64,  Qua<'a, F>);
+impl_op!(Mul, mul, Qua<'a, F>, i128, Qua<'a, F>);
+
+
 // Fの係数
 pub struct FF<F: Field>(pub F);
 impl<'a, F: Field> Mul<FF<F>> for Lin<'a, F> {

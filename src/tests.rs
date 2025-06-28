@@ -8,16 +8,15 @@ pub fn test_fibonacci() {
 
     let i = cs.alloc(1);
     // let mut a = i.clone();
-    let mut b = i.clone() + cs.one();
+    let mut b = i.clone();
+    // let mut b = i.clone() + cs.one();
+    b = cs.wire((&b * 3 * &b - &b) * 5);
+    // let a = cs.wire(&a - &a);
 
-    // cs.equal(&a, cs.constant(1));
-
-    // a = cs.wire(&a + &a);
-
-    for _ in 0..1 {
-        // a = cs.wire(&a + &a);
-        b = cs.wire(&b * &b);
-    }
+    // for _ in 0..1 {
+    //     // a = cs.wire(&a + &a);
+    //     b = cs.wire(&b * &b - &b);
+    // }
 
     // let (witness, asts) = cs.finish(&[a]);
     let (witness, asts) = cs.finish(&[]);
