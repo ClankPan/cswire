@@ -267,7 +267,8 @@ impl<'a, F: PrimeField> PoseidonSponge<'a, F> {
         }
     }
 
-    pub fn absorb(&mut self, input: &[Lin<'a, F>]) {
+    pub fn absorb<A: Absorbable<'a,F>>(&mut self, input: &A) {
+        let input = input.to_vec();
         let elems = input;
         if elems.is_empty() {
             return;
@@ -280,12 +281,12 @@ impl<'a, F: PrimeField> PoseidonSponge<'a, F> {
                     self.permute();
                     absorb_index = 0;
                 }
-                self.absorb_internal(absorb_index, elems);
+                self.absorb_internal(absorb_index, &elems);
             }
             DuplexSpongeMode::Squeezing {
                 next_squeeze_index: _,
             } => {
-                self.absorb_internal(0, elems);
+                self.absorb_internal(0, &elems);
             }
         };
     }
@@ -389,7 +390,7 @@ mod tests {
         let mut sponge = CWPoseidonSponge::<Fr>::new(&cs, &config);
         for v in values.iter() {
             // sponge.absorb(&[*v]); // absorbがWireを受け付けないので、係数を掛けてVにしてる。
-            sponge.absorb(&[cs.alloc(*v)]); // absorbがWireを受け付けないので、係数を掛けてVにしてる。
+            sponge.absorb(&cs.alloc(*v)); // absorbがWireを受け付けないので、係数を掛けてVにしてる。
             println!("in loop");
         }
         let cw_hash = sponge.squeeze_native_field_elements(1)[0].clone();
