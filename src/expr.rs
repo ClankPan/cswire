@@ -1,4 +1,5 @@
 use ark_ff::{BigInteger, Field, PrimeField};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 use core::fmt;
 use std::{
     collections::HashMap,
@@ -8,7 +9,7 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub enum Expr<F> {
+pub enum Expr<F:  Send + Sync> {
     Coeff(F),
     Idx(usize),
     Add(Rc<Expr<F>>, Rc<Expr<F>>),
@@ -182,13 +183,29 @@ impl<F: Field> R1CS<F> {
         }
         true
     }
+
+    pub fn pad_to_next_power_of_2(&mut self) {
+        let len = self.0.len();
+        if len.is_power_of_two() {
+            return; // すでに 2 の冪なら何もしない
+        }
+
+        let empty_constraint = Constraint::<F>(vec![], vec![], vec![]);
+        let next_pow = len.next_power_of_two(); // ① 次の 2 の冪
+        let pad = next_pow - len; // 欠けている個数
+        self.0.extend(std::iter::repeat(empty_constraint).take(pad)); // ② 末尾に追加
+    }
+
+    pub fn num_of_constraints(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl<F: Field> ASTs<F> {
     pub fn compile(self) -> R1CS<F> {
         let constraints: Vec<_> = self
             .exprs
-            .iter()
+            .par_iter()
             .map(|expr| {
                 let mut constraint = ASTs::convert(expr);
                 self.permutate(&mut constraint.0);

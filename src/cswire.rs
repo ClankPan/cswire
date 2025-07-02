@@ -94,6 +94,9 @@ impl<F: Field> CSWire<F> {
     pub fn one(&self) -> Lin<'_, F> {
         self.one.borrow().clone()
     }
+    pub fn zero(&self) -> Lin<'_, F> {
+        self.constant(0)
+    }
 
     pub fn constant<T>(&self, value: T) -> Lin<'_, F>
     where
