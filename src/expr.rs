@@ -1,20 +1,20 @@
 use ark_ff::{BigInteger, Field, PrimeField};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 use core::fmt;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
     ops::{Add, Mul, Sub},
-    rc::Rc,
+    sync::Arc,
 };
 
 #[derive(Debug, Clone)]
-pub enum Expr<F:  Send + Sync> {
+pub enum Expr<F: Send + Sync> {
     Coeff(F),
     Idx(usize),
-    Add(Rc<Expr<F>>, Rc<Expr<F>>),
-    Sub(Rc<Expr<F>>, Rc<Expr<F>>),
-    Mul(Rc<Expr<F>>, Rc<Expr<F>>),
+    Add(Arc<Expr<F>>, Arc<Expr<F>>),
+    Sub(Arc<Expr<F>>, Arc<Expr<F>>),
+    Mul(Arc<Expr<F>>, Arc<Expr<F>>),
 }
 
 // indexからexprを作る。
@@ -37,7 +37,7 @@ impl<F: Field> Add for Expr<F> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Expr::Add(Rc::new(self), Rc::new(rhs))
+        Expr::Add(Arc::new(self), Arc::new(rhs))
     }
 }
 
@@ -46,7 +46,7 @@ impl<F: Field> Sub for Expr<F> {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Expr::Sub(Rc::new(self), Rc::new(rhs))
+        Expr::Sub(Arc::new(self), Arc::new(rhs))
     }
 }
 
@@ -54,7 +54,7 @@ impl<F: Field> Mul for Expr<F> {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        Expr::Mul(Rc::new(self), Rc::new(rhs))
+        Expr::Mul(Arc::new(self), Arc::new(rhs))
     }
 }
 
@@ -201,7 +201,7 @@ impl<F: Field> R1CS<F> {
     }
 }
 
-impl<F: Field> ASTs<F> {
+impl<F: Field + Send + Sync> ASTs<F> {
     pub fn compile(self) -> R1CS<F> {
         let constraints: Vec<_> = self
             .exprs
