@@ -1,6 +1,6 @@
 use ark_ff::{BigInteger, Field, PrimeField};
 use core::fmt;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -128,6 +128,7 @@ pub fn parse<F: Field>(expr: &Expr<F>) -> Term<F> {
                 (Term::Quadratic(_, _, _, _), Term::Quadratic(_, _, _, _)) => panic!(),
             }
         }
+        _=> panic!()
     }
 }
 
@@ -317,72 +318,25 @@ impl<F: PrimeField> Display for I32Coeff<F> {
 
 use smallvec::SmallVec;
 
-/* ---------------- Core IR ---------------- */
-
-// #[derive(Debug, Clone)]
-// pub enum Expr<F: Field + Send + Sync> {
-//     Coeff(F),
-//     Idx(usize),
-//     Add(Arc<Expr<F>>, Arc<Expr<F>>),
-//     Sub(Arc<Expr<F>>, Arc<Expr<F>>),
-//     Mul(Arc<Expr<F>>, Arc<Expr<F>>),
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct Constraint<F: Field>(
-//     pub Vec<(usize, F)>, // A‑vector
-//     pub Vec<(usize, F)>, // B‑vector
-//     pub Vec<(usize, F)>, // C‑vector
-// );
-
-// #[derive(Debug, Clone)]
-// pub struct R1CS<F: Field>(pub Vec<Constraint<F>>);
-//
-// pub struct ASTs<F: Field + Send + Sync> {
-//     pub permu: Vec<usize>,
-//     pub exprs: Vec<Expr<F>>, // one constraint per expression
-// }
-
 /* ---------------- Internal helpers ---------------- */
 
-// type LC<F> = SmallVec<[(usize, F); 32]>; // local linear comb
-type LC<F> = Vec<(usize, F)>; // local linear comb
-
-#[derive(Default)]
-struct Parts<F: Field> {
-    a: LC<F>,
-    b: LC<F>,
-    c: LC<F>,
-    scale: F, // accumulated scalar factor
-}
-
-// merge (push & combine duplicates) – assumes input already permuted
-fn push<F: Field>(dst: &mut LC<F>, (idx, coef): (usize, F)) {
-    if let Some(pos) = dst.iter_mut().find(|(i, _)| *i == idx) {
-        pos.1 += coef;
-    } else {
-        dst.push((idx, coef));
-    }
-}
-
+type LC<F> = SmallVec<[(usize, F); 8]>; // local linear comb
 /* ---------------- DFS builder ---------------- */
 
 fn dfs<F: Field>(e: &Expr<F>, permu: &[usize], out: &mut Parts<F>) {
     match e {
-        // Expr::Coeff(c) => out.scale *= c,
-        // Expr::Idx(i) => push(&mut out.c, (permu[*i], -F::ONE)), // move to RHS
-        Expr::Coeff(c) => {},
-        Expr::Idx(i) => {}, // move to RHS
+        Expr::Coeff(c) => out.scale *= c,
+        Expr::Idx(i) => push(&mut out.c, (permu[*i], -F::ONE)), // move to RHS
         Expr::Add(l, r) => {
             dfs(l, permu, out);
             dfs(r, permu, out);
         }
         Expr::Sub(l, r) => {
             dfs(l, permu, out);
-            // let prev = out.scale;
-            // out.scale = -F::ONE; // negate right branch
+            let prev = out.scale;
+            out.scale = -F::ONE; // negate right branch
             dfs(r, permu, out);
-            // out.scale = prev;
+            out.scale = prev;
         }
         Expr::Mul(l, r) => {
             // collect lhs
@@ -391,26 +345,87 @@ fn dfs<F: Field>(e: &Expr<F>, permu: &[usize], out: &mut Parts<F>) {
                 ..Default::default()
             };
             dfs(l, permu, &mut left);
-            // // collect rhs
-            // let mut right = Parts::<F> {
-            //     scale: F::ONE,
-            //     ..Default::default()
-            // };
-            // dfs(r, permu, &mut right);
-            //
-            // // Outer product – push into A & B (one term per side)
-            // for &(i, coef_l) in &left.c {
-            //     push(&mut out.a, (i, coef_l * right.scale));
-            // }
-            // for &(j, coef_r) in &right.c {
-            //     push(&mut out.b, (j, coef_r * left.scale));
-            // }
-            //
-            // // carry over accumulated scalar
-            // out.scale *= left.scale * right.scale;
+            // collect rh
+            let mut right = Parts::<F> {
+                scale: F::ONE,
+                ..Default::default()
+            };
+            dfs(r, permu, &mut right);
+
+            // Outer product – push into A & B (one term per side)
+            for &(i, coef_l) in &left.c {
+                push(&mut out.a, (i, coef_l * right.scale));
+            }
+            for &(j, coef_r) in &right.c {
+                push(&mut out.b, (j, coef_r * left.scale));
+            }
+
+            // carry over accumulated scalar
+            out.scale *= left.scale * right.scale;
         }
     }
 }
+
+
+use std::collections::VecDeque;
+
+fn bfs<F: Field>(root: &Expr<F>, permu: &[usize], out: &mut Parts<F>) {
+    let mut q: VecDeque<(&Expr<F>, F /* sign */)> = VecDeque::new();
+    q.push_back((root, F::ONE));
+
+    while let Some((node, sign)) = q.pop_front() {
+        match node {
+            Expr::Coeff(c) => out.scale *= sign * c,
+            Expr::Idx(i)   => push(&mut out.c, (permu[*i], -sign)), // C へ
+
+            Expr::Add(l, r) => {
+                q.push_back((l,  sign));
+                q.push_back((r,  sign));
+            }
+            Expr::Sub(l, r) => {
+                q.push_back((l,  sign));
+                q.push_back((r, -sign));
+            }
+
+            Expr::Mul(l, r) => {
+                // Mul だけは左右を DFS 的にまとめる方が楽
+                // -> 既存の dfs() を再利用
+                let mut left  = Parts::<F>::default();
+                let mut right = Parts::<F>::default();
+                dfs(l, permu, &mut left);
+                dfs(r, permu, &mut right);
+
+                for &(i, c) in &left.c {
+                    push(&mut out.a, (i,  c * right.scale * sign));
+                }
+                for &(j, c) in &right.c {
+                    push(&mut out.b, (j, c * left.scale  * sign));
+                }
+                out.scale *= left.scale * right.scale;
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct Parts<F: ark_ff::Field> {
+    a: LC<F>,
+    b: LC<F>,
+    c: LC<F>,
+    scale: F,
+}
+
+fn push<F: ark_ff::Field>(dst: &mut LC<F>, (idx, coef): (usize, F)) {
+    // if coef.is_zero() {
+    //     return;
+    // }
+    // if let Some(existing) = dst.iter_mut().find(|(i, _)| *i == idx) {
+    //     existing.1 += coef;
+    // } else {
+    //     dst.push((idx, coef));
+    // }
+}
+
 
 /* ---------------- Public API ---------------- */
 
@@ -419,9 +434,41 @@ impl<F: Field + Send + Sync> ASTs<F> {
         let permu = &self.permu;
         let exprs_len = self.exprs.len();
         println!("expr.len: {}", exprs_len);
-        let mut constraints = Vec::with_capacity(self.exprs.len());
-        for (count, expr) in self.exprs.into_iter().enumerate() {
-                
+        // let mut constraints = Vec::with_capacity(self.exprs.len());
+        // for (count, expr) in self.exprs.into_iter().enumerate() {
+        //     let mut parts = Parts::<F> {
+        //         scale: F::ONE,
+        //         ..Default::default()
+        //     };
+        //     // dfs(&expr, permu, &mut parts);
+        //     bfs(&expr, permu, &mut parts);
+        //
+        //     // scale A & B by accumulated scalar
+        //     // let a = parts
+        //     //     .a
+        //     //     .into_iter()
+        //     //     .map(|(i, c)| (i, c * parts.scale))
+        //     //     .collect::<Vec<_>>();
+        //     // let b: Vec<_> = parts.b.into_iter().collect();
+        //     // let mut c = parts.c;
+        //     // if parts.scale != F::ONE {
+        //     //     // constant term becomes scale * 1 on C side
+        //     //     push(&mut c, (0, parts.scale));
+        //     // }
+        //     // println!("count: {count}/{exprs_len}, len of a:{},b:{},c:{}", a.len(),b.len(),c.len());
+        //     // constraints.push(Constraint(a, b, c.into_iter().collect()));
+        //
+        //     println!("count: {count}/{exprs_len}");
+        //     constraints.push(Constraint(vec![], vec![], vec![]));
+        // }
+        //
+
+        let constraints: Vec<_> = self
+            .exprs
+            // .par_iter()
+            .into_par_iter()
+            .enumerate()
+            .map(|(count, expr)| {
                 let mut parts = Parts::<F> {
                     scale: F::ONE,
                     ..Default::default()
@@ -429,53 +476,21 @@ impl<F: Field + Send + Sync> ASTs<F> {
                 dfs(&expr, permu, &mut parts);
 
                 // scale A & B by accumulated scalar
-                // let a = parts
-                //     .a
-                //     .into_iter()
-                //     .map(|(i, c)| (i, c * parts.scale))
-                //     .collect::<Vec<_>>();
-                // let b: Vec<_> = parts.b.into_iter().collect();
-                // let mut c = parts.c;
-                // if parts.scale != F::ONE {
-                //     // constant term becomes scale * 1 on C side
-                //     push(&mut c, (0, parts.scale));
-                // }
+                let a = parts
+                    .a
+                    .into_iter()
+                    .map(|(i, c)| (i, c * parts.scale))
+                    .collect::<Vec<_>>();
+                let b: Vec<_> = parts.b.into_iter().collect();
+                let mut c = parts.c;
+                if parts.scale != F::ONE {
+                    // constant term becomes scale * 1 on C side
+                    push(&mut c, (0, parts.scale));
+                }
                 // println!("count: {count}/{exprs_len}, len of a:{},b:{},c:{}", a.len(),b.len(),c.len());
-                // constraints.push(Constraint(a, b, c.into_iter().collect()));
-
-
-                println!("count: {count}/{exprs_len}");
-                constraints.push(Constraint(vec![],vec![],vec![]));
-                
-        }
-        // let constraints: Vec<_> = self
-        //     .exprs
-        //     // .par_iter()
-        //     .into_iter()
-        //     .enumerate()
-        //     .map(|(count, expr)| {
-        //         let mut parts = Parts::<F> {
-        //             scale: F::ONE,
-        //             ..Default::default()
-        //         };
-        //         dfs(&expr, permu, &mut parts);
-        //
-        //         // scale A & B by accumulated scalar
-        //         let a = parts
-        //             .a
-        //             .into_iter()
-        //             .map(|(i, c)| (i, c * parts.scale))
-        //             .collect::<Vec<_>>();
-        //         let b: Vec<_> = parts.b.into_iter().collect();
-        //         let mut c = parts.c;
-        //         if parts.scale != F::ONE {
-        //             // constant term becomes scale * 1 on C side
-        //             push(&mut c, (0, parts.scale));
-        //         }
-        //         println!("count: {count}/{exprs_len}, len of a:{},b:{},c:{}", a.len(),b.len(),c.len());
-        //         Constraint(a, b, c.into_iter().collect())
-        //     })
-        //     .collect();
+                Constraint(a, b, c.into_iter().collect())
+            })
+            .collect();
 
         R1CS(constraints)
     }
