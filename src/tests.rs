@@ -4,9 +4,9 @@ use crate::CSWire;
 
 #[test]
 pub fn test_fibonacci() {
-    let cs = CSWire::<Fr>::default();
+    let cs = CSWire::<Fr>::new(true);
 
-    let i = cs.alloc(1);
+    let i = cs.alloc(2);
     // let mut a = i.clone();
     let mut b = i.clone();
     // let mut b = i.clone() + cs.one();
@@ -23,6 +23,6 @@ pub fn test_fibonacci() {
     let r1cs = r1cs.unwrap();
 
     println!("{}", r1cs);
-    println!("{:?}", w);
+    println!("{:?} {:?}", x, w);
     println!("is_satisfied {}", r1cs.is_satisfied(&x, &w));
 }

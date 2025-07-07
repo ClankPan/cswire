@@ -1,7 +1,7 @@
-use ark_ff::{BigInt, Field, PrimeField};
+use ark_ff::{BigInt, BigInteger, Field, PrimeField};
 use itertools::Itertools;
 use core::fmt;
-use std::{cell::RefCell, cmp::Ordering, marker::PhantomData};
+use std::{cell::RefCell, cmp::Ordering, fmt::{Display, Formatter}, marker::PhantomData};
 
 use crate::{Lc, Lin, Qua, binary_ops::FF};
 
@@ -32,8 +32,8 @@ pub struct CSWire<F: Field> {
     do_compile: bool,
 }
 
-impl<F: Field> Default for CSWire<F> {
-    fn default() -> Self {
+impl<F: Field> CSWire<F> {
+    pub fn new(do_compile: bool) -> Self {
         let one = Lin {
             value: F::ONE,
             lc: Lc::new(1, true),
@@ -42,18 +42,9 @@ impl<F: Field> Default for CSWire<F> {
         // IOの分を確保しておく。
         Self {
             one: RefCell::new(one),
-            witness: RefCell::new(vec![]),
+            witness: RefCell::new(vec![F::ONE]),
             exprs: RefCell::new(vec![]),
-            do_compile: true,
-        }
-    }
-}
-
-impl<F: Field> CSWire<F> {
-    pub fn new(do_compile: bool) -> Self {
-        Self {
             do_compile,
-            ..Default::default()
         }
     }
 
@@ -64,6 +55,7 @@ impl<F: Field> CSWire<F> {
         let value = value.into();
         let mut witness = self.witness.borrow_mut();
         let index = witness.len();
+        println!("alloc: {index}");
         witness.push(value);
         let lin = Lin {
             value,
@@ -161,6 +153,8 @@ impl<F: Field> CSWire<F> {
             .collect();
 
         let exprs = self.exprs.borrow().clone();
+        println!("io: {:?}, w: {:?}", io, self.witness.borrow());
+
         let mut witness = self.witness.borrow().clone();
         let mut permu: Vec<usize> = (0..witness.len()).collect();
         for (i, j) in io.iter().enumerate() {
@@ -216,6 +210,63 @@ impl<F: Field> R1CS<F> {
     }
 }
 
+/* ---------- Display 実装 ---------- */
+
+impl<F: PrimeField> Display for Constraint<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let show = |vec: &[(usize, F)]| {
+            vec.iter()
+                .map(|(i, c)| format!("(w:{}, {})", i, I32Coeff(*c)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        writeln!(f, "A: [{}]", show(&self.a))?;
+        writeln!(f, "B: [{}]", show(&self.b))?;
+        writeln!(f, "C: [{}]", show(&self.c))
+    }
+}
+
+impl<F: PrimeField> Display for R1CS<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for (i, c) in self.0.iter().enumerate() {
+            writeln!(f, "Constraint #{i}")?;
+            writeln!(f, "{c}")?;
+        }
+        Ok(())
+    }
+}
+
+// ── 係数ラッパ ──
+struct I32Coeff<F: PrimeField>(F);
+
+impl<F: PrimeField> Display for I32Coeff<F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // 素体 p とその半分 (p/2)
+        let p = F::MODULUS;
+        let mut half = p;
+        half.div2();
+
+        // 係数を BigInt に
+        let x = self.0.into_bigint();
+
+        // x > p/2 なら負側へ射影：  x' = x - p  (結果は  -(p - x) )
+        let signed = if x > half {
+            // p - x は必ず正
+            let mut tmp = p;
+            let _borrow = tmp.sub_with_borrow(&x);
+            // "-" を付けた文字列
+            format!("-{}", tmp)
+        } else {
+            format!("{}", x)
+        };
+
+        // i32 範囲チェック
+        match signed.parse::<i128>() {
+            Ok(n) if n.abs() <= i32::MAX as i128 => write!(f, "{n}"),
+            _ => write!(f, "<overflow>"), // 収まらないときは警告表示
+        }
+    }
+}
 
 
 // #[cfg(test)]

@@ -43,8 +43,8 @@ impl<F: Field> Add<Lc<F>> for Lc<F> {
                 }
                 Some(lc)
             }
-            // _ => None,
-            _ => panic!("debug: add"),
+            _ => None,
+            // _ => panic!("debug: add"),
         };
         Self(lc)
     }
@@ -63,8 +63,8 @@ impl<F: Field> Sub<Lc<F>> for Lc<F> {
                 }
                 Some(lc)
             }
-            // _ => None,
-            _ => panic!("debug: sub"),
+            _ => None,
+            // _ => panic!("debug: sub"),
         };
         Self(lc)
     }
