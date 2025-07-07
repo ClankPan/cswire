@@ -267,7 +267,7 @@ impl<'a, F: PrimeField> PoseidonSponge<'a, F> {
         }
     }
 
-    pub fn absorb<A: Absorbable<'a,F>>(&mut self, input: &A) {
+    pub fn absorb<A: Absorbable<'a, F>>(&mut self, input: &A) {
         let input = input.to_vec();
         let elems = input;
         if elems.is_empty() {
@@ -318,9 +318,9 @@ pub trait Absorbable<'a, F: PrimeField> {
     fn to_vec(&self) -> Vec<Lin<'a, F>>;
 }
 
-impl<'a, F: PrimeField> Absorbable<'a,F> for Lin<'a,F> {
+impl<'a, F: PrimeField> Absorbable<'a, F> for Lin<'a, F> {
     fn to_vec(&self) -> Vec<Lin<'a, F>> {
-       vec![self.clone()] 
+        vec![self.clone()]
     }
 }
 
@@ -336,7 +336,7 @@ mod tests {
     };
     use ark_ff::PrimeField;
 
-    use crate::{extract::ToRaw, CSWire, Linear};
+    use crate::CSWire;
 
     use super::{PoseidonSponge as CWPoseidonSponge, circom_bn254_poseidon_canonical_config};
 
@@ -385,9 +385,9 @@ mod tests {
         let ark_hash = sponge.squeeze_native_field_elements(1)[0];
 
         // // cswireのposeidon
-        let cs = CSWire::<Fr>::default();
+        let cs = CSWire::<Fr>::new(true);
         let config = circom_bn254_poseidon_canonical_config::<Fr>();
-        let mut sponge = CWPoseidonSponge::<Fr>::new(&cs, &config);
+        let mut sponge = CWPoseidonSponge::new(&cs, &config);
         for v in values.iter() {
             // sponge.absorb(&[*v]); // absorbがWireを受け付けないので、係数を掛けてVにしてる。
             sponge.absorb(&cs.alloc(*v)); // absorbがWireを受け付けないので、係数を掛けてVにしてる。

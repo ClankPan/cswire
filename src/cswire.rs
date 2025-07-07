@@ -1,56 +1,63 @@
-use std::{cell::RefCell, marker::PhantomData};
-
-use ark_ff::Field;
+use ark_ff::{BigInt, Field, PrimeField};
 use itertools::Itertools;
+use core::fmt;
+use std::{cell::RefCell, cmp::Ordering, marker::PhantomData};
 
-use crate::{
-    ASTs, Expr,
-    binary_ops::FF,
-    extract::{ToExpr, ToRaw},
-    linear::Linear,
-    quadratic::Quadratic,
-};
-pub type V<'a, F> = Lin<'a, F>;
-pub type VV<'a, F> = Qua<'a, F>;
+use crate::{Lc, Lin, Qua, binary_ops::FF};
 
-#[derive(Debug, Clone)]
-pub struct Lin<'a, F: Field> {
-    pub(crate) value: F,
-    pub(crate) expr: Expr<F>,
-    pub(crate) _life: PhantomData<&'a ()>,
+macro_rules! iter {
+    ($list:expr) => {
+        $list.0.unwrap().into_iter()
+    };
 }
 
 #[derive(Debug, Clone)]
-pub struct Qua<'a, F: Field> {
-    pub(crate) value: F,
-    pub(crate) expr: Expr<F>,
-    pub(crate) _life: PhantomData<&'a ()>,
+pub(crate) struct InnerConstraint<F: Field>(pub F, pub Lc<F>, pub Lc<F>, pub Lc<F>);
+
+#[derive(Debug, Clone)]
+pub struct Constraint<F: Field> {
+    pub a: Vec<(usize, F)>,
+    pub b: Vec<(usize, F)>,
+    pub c: Vec<(usize, F)>,
 }
+
+#[derive(Debug, Clone)]
+pub struct R1CS<F: Field>(pub Vec<Constraint<F>>);
 
 // 一貫性を保つためにCloneは実装しない。やるならRcとともに。
 pub struct CSWire<F: Field> {
     one: RefCell<Lin<'static, F>>,
     witness: RefCell<Vec<F>>,
-    exprs: RefCell<Vec<Expr<F>>>,
+    exprs: RefCell<Vec<InnerConstraint<F>>>,
+    do_compile: bool,
 }
 
 impl<F: Field> Default for CSWire<F> {
     fn default() -> Self {
         let one = Lin {
             value: F::ONE,
-            expr: 0.into(),
+            lc: Lc::new(1, true),
             _life: PhantomData,
         };
+        // IOの分を確保しておく。
         Self {
             one: RefCell::new(one),
-            witness: RefCell::new(vec![F::ONE]),
+            witness: RefCell::new(vec![]),
             exprs: RefCell::new(vec![]),
+            do_compile: true,
         }
     }
 }
 
 impl<F: Field> CSWire<F> {
-    pub fn alloc<T>(&self, value: T) -> Lin<'_, F>
+    pub fn new(do_compile: bool) -> Self {
+        Self {
+            do_compile,
+            ..Default::default()
+        }
+    }
+
+    fn alloc_inner<T>(&self, value: T) -> (usize, Lin<'_, F>)
     where
         F: From<T>,
     {
@@ -58,37 +65,61 @@ impl<F: Field> CSWire<F> {
         let mut witness = self.witness.borrow_mut();
         let index = witness.len();
         witness.push(value);
-        Lin {
+        let lin = Lin {
             value,
-            expr: index.into(),
+            lc: Lc::new(index, self.do_compile),
             _life: PhantomData,
-        }
+        };
+        (index, lin)
     }
 
-    pub fn wire<Q: Quadratic<F> + ToRaw<F> + ToExpr<F>>(&self, var: Q) -> Lin<'_, F> {
-        if let Expr::Idx(i) = var.expr() {
-            // もし、exprが何の線型結合でなければ(Witnessそのもの)
-            // そのままを返す
-            return Lin {
-                value: var.raw(),
-                expr: Expr::Idx(i),
-                _life: PhantomData,
-            };
-        }
+    fn wire_inner<'a, Q>(&'a self, var: Q) -> (usize, Lin<'a, F>)
+    where
+        Q: Into<Qua<'a, F>>,
+    {
+        let v: Qua<'a, F> = var.into();
 
-        let new_var = self.alloc(var.raw());
+        // todo: もしwitnessそのものなら、そのまま返す。
+
+        let (i, w) = self.alloc_inner(v.value);
+        let c = v - &w; // 制約式はイコール・ゼロになる形で保管
+        if self.do_compile {
+            self.exprs
+                .borrow_mut()
+                .push(InnerConstraint(c.qc.0, c.qc.1, c.qc.2, c.lc));
+        }
+        (i, w)
+    }
+
+    pub fn alloc<T>(&self, value: T) -> Lin<'_, F>
+    where
+        F: From<T>,
+    {
+        let (_, lin) = self.alloc_inner(value);
+        lin
+    }
+
+    pub fn wire<'a, Q>(&'a self, var: Q) -> Lin<'a, F>
+    where
+        Q: Into<Qua<'a, F>>,
+    {
+        let (_, lin) = self.wire_inner(var);
+        lin
+    }
+
+    pub fn equal<'a, Q, L>(&'a self, qua: Q, lin: L)
+    where
+        Q: Into<Qua<'a, F>>,
+        L: Into<Lin<'a, F>>,
+    {
+        let q: Qua<'a, F> = qua.into();
+        let l: Lin<'a, F> = lin.into();
+
+        // println!("q: {:?}, l: {:?}", q,l);
+        let c = q - l; // 制約式はイコール・ゼロになる形で保管
         self.exprs
             .borrow_mut()
-            .push(var.expr() - new_var.expr.clone()); // 制約式はイコール・ゼロになる形で保管。
-        new_var
-    }
-
-    pub fn equal<Q, L>(&self, lhs: Q, rhs: L)
-    where
-        Q: Quadratic<F> + ToRaw<F> + ToExpr<F>,
-        L: Linear<F> + ToRaw<F> + ToExpr<F>,
-    {
-        self.exprs.borrow_mut().push(lhs.expr() - rhs.expr()); // 制約式はイコール・ゼロになる形で保管。
+            .push(InnerConstraint(c.qc.0, c.qc.1, c.qc.2, c.lc));
     }
 
     pub fn one(&self) -> Lin<'_, F> {
@@ -108,107 +139,119 @@ impl<F: Field> CSWire<F> {
     pub fn set_one(&self, new: Lin<'_, F>) -> Lin<'static, F> {
         // コピーして 'static にする
         let static_lin = Lin {
-            value: new.value,   // accessor で値を取得
-            expr: new.expr,     // `expr` が Copy なら直接
+            value: new.value, // accessor で値を取得
+            lc: new.lc,
             _life: PhantomData, // 'static
         };
         self.one.replace(static_lin)
     }
 
-    pub fn finish<'a>(
-        &'a self,
-        io: &[Lin<'a,F>],
-    ) -> (Vec<F>, ASTs<F>) {
+    pub fn finish<'a, Q>(&'a self, io: &[Q]) -> (Vec<F>, Vec<F>, Option<R1CS<F>>)
+    where
+        Q: Into<Qua<'a, F>> + Clone,
+    {
+        // todo: Linがwireしたばかりのものだと、非効率な制約になってしまう
         let io: Vec<_> = io
             .iter()
             .cloned()
-            .map(|i| match self.wire(i).expr() {
-                Expr::Idx(idx) => idx,
-                _ => unreachable!("wire() should return Expr::Idx as its expr"),
-            })
-            .chain(std::iter::once(0)) // ONE を指すwitnessはからならず、先頭にくるように追加
+            .map(|v| self.wire_inner(v).0) // witnessのindexだけを取り出す
+            .chain(std::iter::once(0)) // 定数
             .unique() // 重複を取り除く
             .sorted_unstable() // 昇順ソート
             .collect();
+
         let exprs = self.exprs.borrow().clone();
         let mut witness = self.witness.borrow().clone();
         let mut permu: Vec<usize> = (0..witness.len()).collect();
-        for (i, j) in io.into_iter().enumerate() {
-            permu.swap(i, j);
-            witness.swap(i, j);
+        for (i, j) in io.iter().enumerate() {
+            permu.swap(i, *j);
+            witness.swap(i, *j);
         }
+        
+        println!("do_compile: {}", self.do_compile);
+        let constraint = if self.do_compile {
+            let mut count = 0;
+            let exprs_len = exprs.len();
+            let constraints: Vec<_> = exprs
+                .into_iter()
+                .map(|expr| {
+                    println!("{count}/{exprs_len}");
+                    count += 1;
+                    
+                    let coeff = expr.0;
+                    // println!("expr: {:?}", expr);
+                    let a: Vec<_> = iter!(expr.1).map(|(i, f)| (i, coeff * f)).collect();
+                    let b: Vec<_> = iter!(expr.2).collect();
+                    let c: Vec<_> = iter!(expr.3).collect();
+                    Constraint { a, b, c }
+                })
+                .collect();
+            Some(R1CS(constraints))
+        } else {
+            None
+        };
 
-        (witness, ASTs { permu, exprs })
-    }
+        let io = witness.drain(..io.len()).collect();
 
-    // pub fn finalize(mut self, inputs: &[Wire<'a, F>]) -> (Vec<F>, Vec<Expr<F>>) {
-    //     // ユーザが指定したinputにするWireを先頭の方に持ってくる。
-    //     // 今ココで返すWitnessの順番と、Exprが指定するWitnessの場所が合うようにする。
-    //     let inputs: Vec<usize> = inputs
-    //         .iter()
-    //         .map(|w| w.exp) // 既存インデックス
-    //         .chain(std::iter::once(0)) // ONE (=0) を必ず追加
-    //         .unique() // 重複を取り除く
-    //         .sorted_unstable() // 昇順ソート
-    //         .collect();
-    //     let mut permu: Vec<usize> = (0..self.wires.len()).collect();
-    //     for (i, j) in inputs.into_iter().enumerate() {
-    //         permu.swap(i, j);
-    //         self.wires.swap(i, j);
-    //     }
-    //     let exprs = self
-    //         .exprs
-    //         .into_iter()
-    //         .map(|expr| {
-    //             let nodes: Vec<AST<F>> = expr
-    //                 .0
-    //                 .into_iter()
-    //                 .map(|node| match node {
-    //                     AST::Idx(n) => AST::Idx(permu[n]),
-    //                     _ => node,
-    //                 })
-    //                 .collect();
-    //             Expr(nodes)
-    //         })
-    //         .collect();
-    //     (self.wires, exprs)
-    // }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::extract::ToRaw;
-
-    use super::CSWire;
-    use ark_bn254::Fr;
-
-    #[test]
-    pub fn test_alloc_ref() {
-        let mut var;
-        {
-            let cs = CSWire::<Fr>::default();
-            let a = cs.alloc(0);
-            let b = cs.alloc(0);
-            let c = cs.alloc(0);
-            // let one = cs.set_one(a);
-            // let one = cs.set_one(one);
-            var = cs.one();
-
-            cs.equal(&a + &b, cs.constant(0));
-            cs.equal(cs.constant(0), &a + &b);
-            cs.equal(&a + &b, &a + &b);
-            cs.equal(&c * (&a + &b), &a + &b);
-
-            let _e = cs.wire(&c * (&a + &b));
-            let e = cs.alloc(c.raw() * (a.raw() + b.raw()));
-            cs.equal(&c * (&a + &b), e);
-
-            // cs.equal(c, 0);
-            // let old = cs.set_one(var);
-            // var = cs.set_one(old);
-            // let b = var;
-            // cs.one = var;
-        }
-        // println!("{}", var.raw());
+        (io, witness, constraint)
     }
 }
+
+impl<F: Field> R1CS<F> {
+    pub fn is_satisfied(&self, x: &[F], w: &[F]) -> bool {
+        let w = [x, w].concat();
+        for constraint in &self.0 {
+            let a: F = constraint.a.iter().map(|(i, f)| *f * w[*i]).sum();
+            let b: F = constraint.a.iter().map(|(i, f)| *f * w[*i]).sum();
+            let c: F = constraint.c.iter().map(|(i, f)| *f * w[*i]).sum();
+            if a * b + c == F::ZERO {
+                return false
+            }
+        }
+        true
+    }
+
+    pub fn num_of_constraints(&self) -> usize {
+        self.0.len()
+    }
+}
+
+
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::extract::ToRaw;
+//
+//     use super::CSWire;
+//     use ark_bn254::Fr;
+//
+//     #[test]
+//     pub fn test_alloc_ref() {
+//         let mut var;
+//         {
+//             let cs = CSWire::<Fr>::default();
+//             let a = cs.alloc(0);
+//             let b = cs.alloc(0);
+//             let c = cs.alloc(0);
+//             // let one = cs.set_one(a);
+//             // let one = cs.set_one(one);
+//             var = cs.one();
+//
+//             cs.equal(&a + &b, cs.constant(0));
+//             cs.equal(cs.constant(0), &a + &b);
+//             cs.equal(&a + &b, &a + &b);
+//             cs.equal(&c * (&a + &b), &a + &b);
+//
+//             let _e = cs.wire(&c * (&a + &b));
+//             let e = cs.alloc(c.raw() * (a.raw() + b.raw()));
+//             cs.equal(&c * (&a + &b), e);
+//
+//             // cs.equal(c, 0);
+//             // let old = cs.set_one(var);
+//             // var = cs.set_one(old);
+//             // let b = var;
+//             // cs.one = var;
+//         }
+//         // println!("{}", var.raw());
+//     }
+// }
